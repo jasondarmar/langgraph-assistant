@@ -1,0 +1,102 @@
+[
+  {
+    "id": "TC001",
+    "description": "Saludo inicial",
+    "messages": ["Hola"],
+    "expected_intent": "saludo",
+    "expected_contains": "Yanny"
+  },
+  {
+    "id": "TC002",
+    "description": "Consulta de servicios",
+    "messages": ["¿Qué servicios ofrecen?"],
+    "expected_intent": "consulta_servicios",
+    "expected_contains": "Odontología general"
+  },
+  {
+    "id": "TC003",
+    "description": "Consulta de doctores",
+    "messages": ["¿Con qué doctores trabajan?"],
+    "expected_intent": "consulta_doctores",
+    "expected_contains": "Dr. Enrique Luna"
+  },
+  {
+    "id": "TC004",
+    "description": "Flujo completo agendar cita",
+    "messages": [
+      "Quiero agendar una cita",
+      "María Torres",
+      "Bogotá",
+      "Blanqueamiento dental",
+      "Dra. Mónica González",
+      "mañana",
+      "10am"
+    ],
+    "expected_intent": "agendar_cita",
+    "expected_contains": "agendada"
+  },
+  {
+    "id": "TC005",
+    "description": "Solicitar doctor no disponible",
+    "messages": ["Quiero cita con el Dr. Juan Pérez"],
+    "expected_intent": "consulta_doctores",
+    "expected_contains": "no está disponible"
+  },
+  {
+    "id": "TC006",
+    "description": "Cancelar cita",
+    "messages": ["Necesito cancelar mi cita"],
+    "expected_intent": "cancelar_cita",
+    "expected_contains": "nombre"
+  },
+  {
+    "id": "TC007",
+    "description": "Modificar cita",
+    "messages": ["Quiero cambiar mi cita a otro horario"],
+    "expected_intent": "modificar_cita",
+    "expected_contains": "nombre"
+  },
+  {
+    "id": "TC008",
+    "description": "Emergencia dental",
+    "messages": ["Me duele mucho una muela, es urgente"],
+    "expected_intent": "emergencia",
+    "expected_requiere_humano": true
+  },
+  {
+    "id": "TC009",
+    "description": "Pregunta fuera de alcance",
+    "messages": ["¿Cuál es el precio del dólar hoy?"],
+    "expected_intent": "fuera_de_alcance",
+    "expected_contains": "consultorio Luna González"
+  },
+  {
+    "id": "TC010",
+    "description": "Consulta de sedes",
+    "messages": ["¿En qué ciudades están?"],
+    "expected_intent": "consulta_sedes",
+    "expected_contains": "Bogotá"
+  },
+  {
+    "id": "TC011",
+    "description": "Horario fuera de atención",
+    "messages": [
+      "Quiero cita",
+      "Pedro López",
+      "La Vega",
+      "Ortodoncia",
+      "Dr. Sebastián Luna",
+      "mañana",
+      "9pm"
+    ],
+    "expected_intent": "agendar_cita",
+    "expected_contains": "horario de atención"
+  },
+  {
+    "id": "TC012",
+    "description": "Despedida",
+    "messages": ["Muchas gracias, hasta luego"],
+    "expected_intent": "despedida",
+    "expected_estado": "finalizado"
+  }
+]

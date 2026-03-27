@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  dental-assistant:
+    build: .
+    image: dental-assistant-langgraph:latest
+    container_name: dental-assistant
+    restart: always
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - default
+      - chatwoot_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Redis para memoria persistente (opcional)
+  redis:
+    image: redis:7-alpine
+    container_name: dental-assistant-redis
+    restart: always
+    ports:
+      - "6380:6379"  # Puerto distinto al del Chatwoot redis (6379)
+    volumes:
+      - redis_data:/data
+    networks:
+      - default
+    profiles:
+      - redis  # Solo se levanta con: docker compose --profile redis up
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    driver: bridge
+  chatwoot_net:
+    external: true
+    name: voc0cwk0k40sscw08gs8g44w
