@@ -150,14 +150,19 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
     if accion == "delete":
         event_id = datos.get("event_id")
         if not event_id or event_id in _null_vals_delete:
-            logger.warning("[Calendar] accion=delete pero event_id es None/null — limpiando sesión")
-            return {
-                **state,
-                "datos_capturados": {},
-                "estado_conversacion": "en_proceso",
-                "accion_calendario": None,
-                "respuesta": "No encontré una cita activa en tu nombre. ¿Te gustaría agendar una nueva cita? 😊",
-            }
+            intent = state.get("intent", "")
+            if intent in ("cancelar_cita", "modificar_cita"):
+                logger.warning("[Calendar] accion=delete sin event_id en flujo cancel/modify — limpiando sesión")
+                return {
+                    **state,
+                    "datos_capturados": {},
+                    "estado_conversacion": "en_proceso",
+                    "accion_calendario": None,
+                    "respuesta": "No encontré una cita activa en tu nombre. ¿Te gustaría agendar una nueva cita? 😊",
+                }
+            else:
+                logger.warning("[Calendar] accion=delete sin event_id — ignorando delete, continuando normal")
+                return {**state, "accion_calendario": None}
 
         success = delete_appointment(event_id)
         if success:
