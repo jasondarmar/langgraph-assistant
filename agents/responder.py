@@ -115,6 +115,27 @@ def generate_response(state: AgentState) -> AgentState:
     if sede_actual:
         context_lines.append(f"[SEDE SELECCIONADA: {sede_actual}.]")
 
+    # Inject already-captured fields so LLM doesn't re-ask for them
+    _null_vals = {"null", "", None}
+    captured_parts = []
+    for key, label in [
+        ("nombre_paciente", "nombre"),
+        ("servicio", "servicio"),
+        ("doctor", "doctor"),
+        ("fecha_cita", "fecha"),
+        ("hora_cita", "hora"),
+    ]:
+        val = datos.get(key)
+        if val not in _null_vals:
+            captured_parts.append(f"{label}={val}")
+    if captured_parts:
+        context_lines.append(
+            f"[DATOS YA CAPTURADOS: {', '.join(captured_parts)}. "
+            "NO vuelvas a preguntar estos datos. "
+            "Si ya tienes los 6 datos (nombre, sede, servicio, doctor, fecha, hora), "
+            "establece estado: datos_completos directamente.]"
+        )
+
     contexto = "\n".join(context_lines)
     historial_completo = f"{contexto}\n{historial_texto}"
     if mensaje:
