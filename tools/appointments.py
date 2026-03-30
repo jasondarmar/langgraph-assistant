@@ -41,7 +41,7 @@ def get_availability(
     ANTES de crear una cita. Consulta siempre el rango de 1 hora alrededor del
     horario solicitado.
     La respuesta incluirá los eventos con su título en formato
-    [Servicio] - [Nombre paciente] - [Doctor].
+    [Sede] - [Nombre paciente] - [Servicio] - [Doctor].
     Debes analizar los títulos de los eventos retornados para verificar si el
     doctor solicitado ya tiene una cita en esa franja horaria.
     Si encuentras un evento cuyo título TERMINA con el nombre del doctor
@@ -87,7 +87,7 @@ def create_appointment(
 ) -> Optional[dict]:
     """
     Crea un evento en el calendario.
-    - summary: "[Servicio] - [Nombre paciente] - [Doctor]"
+    - summary: "[Sede] - [Nombre paciente] - [Servicio] - [Doctor]"
     - description: "Sede: [sede] | Paciente: [nombre] | Servicio: [servicio] | Doctor: [doctor]"
     - start/end: ISO 8601 con timezone -05:00
     Retorna el evento creado o None si falla.
@@ -236,7 +236,7 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
                         }
 
                 # Crear evento
-                summary = f"{servicio} - {nombre} - {doctor}"
+                summary = f"{sede} - {nombre} - {servicio} - {doctor}"
                 description = (
                     f"Sede: {sede} | Paciente: {nombre} | "
                     f"Servicio: {servicio} | Doctor: {doctor}"
