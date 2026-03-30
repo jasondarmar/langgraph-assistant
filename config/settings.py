@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     redis_url: str = Field("redis://localhost:6379/0", env="REDIS_URL")
     use_redis: bool = Field(False, env="USE_REDIS")
 
+    # ─── PostgreSQL (multi-tenant) ────────────────────────────────────────
+    database_url: str = Field("", env="DATABASE_URL")
+
     # ─── LLM Router ──────────────────────────────────────────────────────
     llm_tier1_model: str = Field("gpt-4o-mini", env="LLM_TIER1_MODEL")
     llm_tier2_model: str = Field("gpt-4o", env="LLM_TIER2_MODEL")

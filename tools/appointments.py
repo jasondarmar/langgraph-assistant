@@ -14,6 +14,7 @@ from googleapiclient.errors import HttpError
 
 from app.state import AgentState
 from config.settings import get_settings
+from tools.db_repository import get_tenant_by_inbox_id, save_appointment, update_appointment_estado
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ def delete_appointment(event_id: str) -> bool:
         return False
 
 
-def handle_calendar_action(state: AgentState) -> AgentState:
+async def handle_calendar_action(state: AgentState) -> AgentState:
     """
     Nodo que ejecuta acciones de calendario según lo que el agente indicó:
     - accion_calendario == "delete" → elimina el evento
@@ -153,7 +154,12 @@ def handle_calendar_action(state: AgentState) -> AgentState:
 
         success = delete_appointment(event_id)
         if success:
-            # Limpiar event_id después de eliminar para evitar doble delete
+            # Registrar cancelación en DB
+            await update_appointment_estado(
+                event_id=event_id,
+                estado="cancelada",
+                resumen_conversacion=state.get("resumen_conversacion"),
+            )
             nuevos_datos = {**datos, "event_id": None}
             return {
                 **state,
@@ -214,7 +220,30 @@ def handle_calendar_action(state: AgentState) -> AgentState:
                 created = create_appointment(summary, description, start_iso, end_iso)
 
                 if created:
-                    nuevos_datos = {**datos, "event_id": created.get("id")}
+                    new_event_id = created.get("id")
+                    # Guardar cita en DB (identificar tenant por inbox_id)
+                    inbox_id = state.get("inbox_id")
+                    tenant = await get_tenant_by_inbox_id(inbox_id) if inbox_id else None
+                    if tenant:
+                        await save_appointment(
+                            tenant_id=tenant["id"],
+                            wa_id=state.get("wa_id", ""),
+                            nombre_paciente=nombre,
+                            sede=sede,
+                            servicio=servicio,
+                            doctor=doctor,
+                            fecha_cita=fecha,
+                            hora_cita=hora,
+                            event_id=new_event_id,
+                            resumen_conversacion=state.get("resumen_conversacion"),
+                            modelo_usado=state.get("modelo_usado"),
+                            tokens_entrada=state.get("tokens_entrada", 0),
+                            tokens_salida=state.get("tokens_salida", 0),
+                            costo_estimado=state.get("costo_estimado", 0.0),
+                        )
+                    else:
+                        logger.warning(f"[DB] Tenant no encontrado para inbox_id={inbox_id} — cita no registrada en DB.")
+                    nuevos_datos = {**datos, "event_id": new_event_id}
                     return {
                         **state,
                         "datos_capturados": nuevos_datos,

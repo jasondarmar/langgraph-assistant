@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from app.graph import dental_agent
+from config.database import init_pool, close_pool
 from config.settings import get_settings
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
@@ -34,7 +35,12 @@ _stats = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 LangGraph Dental Assistant arrancando...")
+    if settings.database_url:
+        await init_pool(settings.database_url)
+    else:
+        logger.warning("[DB] DATABASE_URL no configurado — registro en DB desactivado.")
     yield
+    await close_pool()
     logger.info("🛑 LangGraph Dental Assistant detenido.")
 
 
