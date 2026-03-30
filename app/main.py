@@ -115,7 +115,7 @@ async def webhook_chatwoot(request: Request, background_tasks: BackgroundTasks):
     private = body.get("private", False)
     sender_type = body.get("sender", {}).get("type")
 
-    if msg_type != "incoming" or private or sender_type != "contact":
+    if msg_type != "incoming" or private or sender_type not in ("contact", None):
         return {"status": "ignored", "reason": "not from contact or is private"}
 
     # Extraer datos del webhook
