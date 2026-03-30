@@ -91,7 +91,6 @@ def generate_response(state: AgentState) -> AgentState:
         fecha_actual=fecha_actual,
         fecha_actual_texto=fecha_actual_texto,
         fecha_calculada=fecha_calculada,
-        event_id_actual=event_id_actual,
         sede_actual=sede_actual,
     )
 

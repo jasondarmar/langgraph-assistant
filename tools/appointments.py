@@ -146,10 +146,11 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
     datos = state.get("datos_capturados", {})
 
     # ─── DELETE ──────────────────────────────────────────────────────────
+    _null_vals_delete = {"null", "", None}
     if accion == "delete":
         event_id = datos.get("event_id")
-        if not event_id:
-            logger.warning("[Calendar] accion=delete pero event_id es None, skip")
+        if not event_id or event_id in _null_vals_delete:
+            logger.warning("[Calendar] accion=delete pero event_id es None/null, skip")
             return {**state, "accion_calendario": None}
 
         success = delete_appointment(event_id)
