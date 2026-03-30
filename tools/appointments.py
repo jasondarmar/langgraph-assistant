@@ -187,6 +187,13 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
         def _valid(v: any) -> bool:
             return v not in _null_vals
 
+        missing = [k for k, v in {"nombre": nombre, "sede": sede, "servicio": servicio,
+                                    "doctor": doctor, "fecha": fecha, "hora": hora}.items()
+                   if not _valid(v)]
+        if missing:
+            logger.warning(f"[Calendar] datos_completos pero campos inválidos: {missing} — abortando create")
+            return {**state, "estado_conversacion": "en_proceso"}
+
         if all(_valid(v) for v in [nombre, sede, servicio, doctor, fecha, hora]):
             # Construir datetimes
             try:
