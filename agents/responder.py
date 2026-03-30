@@ -110,7 +110,10 @@ def generate_response(state: AgentState) -> AgentState:
         )
     if event_id_actual:
         context_lines.append(
-            f"[EVENT_ID CITA ACTUAL: {event_id_actual}. Úsalo para delete si el paciente confirma.]"
+            f"[CITA YA AGENDADA — event_id: {event_id_actual}. "
+            "La cita fue creada exitosamente. NO mostrar resumen ni pedir confirmación. "
+            "Responde de forma natural a lo que el paciente necesite. "
+            "Si quiere cancelar o modificar, usa accion_calendario: delete.]"
         )
     if sede_actual:
         context_lines.append(f"[SEDE SELECCIONADA: {sede_actual}.]")
@@ -129,12 +132,19 @@ def generate_response(state: AgentState) -> AgentState:
         if val not in _null_vals:
             captured_parts.append(f"{label}={val}")
     if captured_parts:
-        context_lines.append(
-            f"[DATOS YA CAPTURADOS: {', '.join(captured_parts)}. "
-            "NO vuelvas a preguntar estos datos. "
-            "Si ya tienes los 6 datos (nombre, sede, servicio, doctor, fecha, hora), "
-            "establece estado: datos_completos directamente.]"
-        )
+        if event_id_actual:
+            # Appointment already created — don't prompt LLM to ask for confirmation
+            context_lines.append(
+                f"[DATOS DE LA CITA ACTIVA: {', '.join(captured_parts)}. "
+                "Esta cita ya fue creada. NO pedir confirmación.]"
+            )
+        else:
+            context_lines.append(
+                f"[DATOS YA CAPTURADOS: {', '.join(captured_parts)}. "
+                "NO vuelvas a preguntar estos datos. "
+                "Si ya tienes los 6 datos (nombre, sede, servicio, doctor, fecha, hora), "
+                "establece estado: datos_completos directamente.]"
+            )
 
     contexto = "\n".join(context_lines)
     historial_completo = f"{contexto}\n{historial_texto}"
