@@ -151,9 +151,18 @@ def generate_response(state: AgentState) -> AgentState:
         requiere_humano = parsed.get("requiere_humano", False)
         resumen = parsed.get("resumen_conversacion", "")
 
-        # Preservar event_id si ya existía y el LLM no lo retornó
-        if event_id_actual and not nuevos_datos.get("event_id"):
-            nuevos_datos["event_id"] = event_id_actual
+        # Merge: preserve existing session values for fields where LLM returned null
+        _null_values: set = {"null", "", None}
+        datos_merged: DatosCita = {}
+        for key in ("nombre_paciente", "sede", "servicio", "doctor", "fecha_cita", "hora_cita", "event_id"):
+            llm_val = nuevos_datos.get(key)
+            existing_val = datos.get(key)
+            if llm_val not in _null_values:
+                datos_merged[key] = llm_val
+            elif existing_val not in _null_values:
+                datos_merged[key] = existing_val
+            else:
+                datos_merged[key] = llm_val
 
         # Tokens y costo
         usage = response.response_metadata.get("token_usage", {})
@@ -173,7 +182,7 @@ def generate_response(state: AgentState) -> AgentState:
             "fecha_calculada": fecha_calculada,
             "respuesta": respuesta,
             "estado_conversacion": estado_conv,
-            "datos_capturados": nuevos_datos,
+            "datos_capturados": datos_merged,
             "accion_calendario": accion_cal if accion_cal == "delete" else None,
             "requiere_humano": requiere_humano,
             "resumen_conversacion": resumen,
