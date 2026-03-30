@@ -185,6 +185,11 @@ def generate_response(state: AgentState) -> AgentState:
             else:
                 datos_merged[key] = llm_val
 
+        # Force datos_completos when all 6 required fields are present after merge
+        _required = ("nombre_paciente", "sede", "servicio", "doctor", "fecha_cita", "hora_cita")
+        if all(datos_merged.get(f) not in _null_values for f in _required):
+            estado_conv = "datos_completos"
+
         # Tokens y costo
         usage = response.response_metadata.get("token_usage", {})
         input_tokens = usage.get("prompt_tokens", 0)
