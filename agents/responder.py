@@ -188,10 +188,12 @@ def generate_response(state: AgentState) -> AgentState:
         # Validate estado against actual data — LLM can be wrong in both directions
         _required = ("nombre_paciente", "sede", "servicio", "doctor", "fecha_cita", "hora_cita")
         all_present = all(datos_merged.get(f) not in _null_values for f in _required)
-        if all_present:
+        has_active_event = datos_merged.get("event_id") not in _null_values
+        if all_present and not has_active_event:
+            # All fields captured and no existing appointment — ready to create
             estado_conv = "datos_completos"
         elif estado_conv == "datos_completos":
-            # LLM claimed datos_completos but fields are missing — override
+            # LLM claimed datos_completos but fields are missing or event already exists
             estado_conv = "en_proceso"
 
         # Tokens y costo
