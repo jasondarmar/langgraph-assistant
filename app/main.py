@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from app.graph import dental_agent
+from app.memory import reset_human_mode, clear_session
 from config.database import init_pool, close_pool
 from config.settings import get_settings
 
@@ -87,8 +88,22 @@ async def webhook_chatwoot(request: Request, background_tasks: BackgroundTasks):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    # Filtrar solo mensajes entrantes del paciente
     event = body.get("event")
+
+    # ── Conversación resuelta → limpiar sesión completa ───────────────────
+    if event == "conversation_status_changed":
+        status = body.get("status") or body.get("conversation", {}).get("status")
+        wa_id = body.get("conversation", {}).get("contact_inbox", {}).get("source_id", "")
+        if wa_id:
+            if status == "resolved":
+                clear_session(wa_id)
+                logger.info(f"[Webhook] Sesión limpiada para wa_id={wa_id} (conversación resuelta)")
+            elif status == "open":
+                reset_human_mode(wa_id)
+                logger.info(f"[Webhook] Bot retoma conversación para wa_id={wa_id} (status→open)")
+        return {"status": "processed", "reason": "conversation_status_changed"}
+
+    # ── Filtrar solo mensajes entrantes del paciente ──────────────────────
     if event != "message_created":
         return {"status": "ignored", "reason": "not message_created"}
 

@@ -4,14 +4,15 @@ Usa Redis si está disponible, dict en memoria como fallback.
 """
 import json
 import logging
-from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 logger = logging.getLogger(__name__)
 
 # Fallback en memoria (para desarrollo sin Redis)
 _memory_store: dict[str, dict] = {}
+
+INACTIVITY_MINUTES = 30
 
 
 def _get_redis():
@@ -32,6 +33,10 @@ def _get_redis():
 
 def _session_key(wa_id: str) -> str:
     return f"session:{wa_id}"
+
+
+def _now_bogota() -> datetime:
+    return datetime.now(pytz.timezone("America/Bogota"))
 
 
 def get_session(wa_id: str) -> dict:
@@ -97,8 +102,33 @@ def get_history_text(wa_id: str) -> str:
 
 
 def get_session_data(wa_id: str) -> dict:
-    """Retorna datos de la sesión: datos_capturados, human_mode, etc."""
+    """
+    Retorna datos de la sesión: datos_capturados, human_mode, etc.
+    Si han pasado más de INACTIVITY_MINUTES desde la última actividad,
+    resetea datos_capturados para iniciar conversación nueva.
+    El human_mode NO se resetea por inactividad (el humano puede tardar).
+    """
     session = get_session(wa_id)
+
+    # Verificar inactividad (no aplica si está en human_mode)
+    last_activity_raw = session.get("last_activity")
+    if last_activity_raw and not session.get("human_mode", False):
+        try:
+            last_activity = datetime.fromisoformat(last_activity_raw)
+            if _now_bogota() - last_activity > timedelta(minutes=INACTIVITY_MINUTES):
+                logger.info(
+                    f"[Memory] Inactividad >30min para wa_id={wa_id} — "
+                    "reiniciando datos de conversación"
+                )
+                return {
+                    "datos_capturados": {},
+                    "human_mode": False,
+                    "active_session": False,
+                    "fecha_calculada": None,
+                }
+        except Exception:
+            pass
+
     return {
         "datos_capturados": session.get("datos_capturados", {}),
         "human_mode": session.get("human_mode", False),
@@ -110,5 +140,18 @@ def get_session_data(wa_id: str) -> dict:
 def update_session_data(wa_id: str, data: dict) -> None:
     """Actualiza campos de la sesión sin reemplazar el historial."""
     session = get_session(wa_id)
+    data["last_activity"] = _now_bogota().isoformat()
     session.update(data)
     save_session(wa_id, session)
+
+
+def reset_human_mode(wa_id: str) -> None:
+    """
+    Desactiva human_mode para que el bot pueda retomar la conversación.
+    Se llama cuando Chatwoot cambia el estado de la conversación a 'open'.
+    """
+    session = get_session(wa_id)
+    session["human_mode"] = False
+    session["last_activity"] = _now_bogota().isoformat()
+    save_session(wa_id, session)
+    logger.info(f"[Memory] human_mode desactivado para wa_id={wa_id} — bot retoma conversación")
