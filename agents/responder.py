@@ -153,7 +153,12 @@ def generate_response(state: AgentState) -> AgentState:
 
     # ─── Selección de modelo ─────────────────────────────────────────────
     intent = state.get("intent", "otro")
-    model, model_id = get_model_for_intent(intent)
+    _null_vals_router = {"null", "", None}
+    booking_in_progress = any(
+        datos.get(f) not in _null_vals_router
+        for f in ("nombre_paciente", "sede", "servicio", "doctor", "fecha_cita", "hora_cita")
+    )
+    model, model_id = get_model_for_intent(intent, booking_in_progress=booking_in_progress)
 
     # ─── Llamada al LLM ──────────────────────────────────────────────────
     try:

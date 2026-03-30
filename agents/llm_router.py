@@ -9,15 +9,17 @@ from config.settings import get_settings
 logger = logging.getLogger(__name__)
 
 
-def get_model_for_intent(intent: str | None) -> tuple[ChatOpenAI, str]:
+def get_model_for_intent(intent: str | None, booking_in_progress: bool = False) -> tuple[ChatOpenAI, str]:
     """
     Retorna el modelo adecuado y su ID según la intención detectada.
     - Tier 1 (gpt-4o-mini): intenciones simples ~80% de los casos
     - Tier 2 (gpt-4o): agendamiento, modificación, emergencias ~20%
+    Si hay una reserva en progreso (datos_capturados no vacío), siempre tier2
+    para evitar alucinaciones de gpt-4o-mini con respuestas cortas de contexto.
     """
     settings = get_settings()
 
-    if intent in TIER2_INTENTS:
+    if intent in TIER2_INTENTS or booking_in_progress:
         model_id = settings.llm_tier2_model
         tier = "tier2"
     else:
