@@ -223,6 +223,9 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
             # Construir datetimes
             try:
                 hora_clean = hora.replace("pm", "").replace("am", "").strip()
+                # Strip seconds if present: "14:00:00" → "14:00"
+                if hora_clean.count(":") == 2:
+                    hora_clean = hora_clean.rsplit(":", 1)[0]
                 if ":" not in hora_clean:
                     hora_clean += ":00"
                 # Manejar PM/AM
