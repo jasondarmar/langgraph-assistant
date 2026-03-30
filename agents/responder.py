@@ -110,10 +110,12 @@ def generate_response(state: AgentState) -> AgentState:
         )
     if event_id_actual:
         context_lines.append(
-            f"[CITA YA AGENDADA — event_id: {event_id_actual}. "
-            "La cita fue creada exitosamente. NO mostrar resumen ni pedir confirmación. "
-            "Responde de forma natural a lo que el paciente necesite. "
-            "Si quiere cancelar o modificar, usa accion_calendario: delete.]"
+            f"[CITA ACTIVA — event_id: {event_id_actual}. "
+            "El paciente YA tiene una cita agendada con los datos que aparecen abajo. "
+            "Si el paciente quiere MODIFICAR o CANCELAR: usa accion_calendario: delete. "
+            "Si el paciente quiere agendar una cita DIFERENTE: primero debes cancelar la actual con delete, luego recolecta los nuevos datos desde cero. "
+            "NO uses los datos de la cita actual para una nueva reserva sin cancelar primero. "
+            "Si el paciente está hablando de otro tema: responde normalmente.]"
         )
     if sede_actual:
         context_lines.append(f"[SEDE SELECCIONADA: {sede_actual}.]")
@@ -133,10 +135,9 @@ def generate_response(state: AgentState) -> AgentState:
             captured_parts.append(f"{label}={val}")
     if captured_parts:
         if event_id_actual:
-            # Appointment already created — don't prompt LLM to ask for confirmation
             context_lines.append(
-                f"[DATOS DE LA CITA ACTIVA: {', '.join(captured_parts)}. "
-                "Esta cita ya fue creada. NO pedir confirmación.]"
+                f"[DATOS DE LA CITA EXISTENTE (NO usar para nueva reserva sin cancelar primero): "
+                f"{', '.join(captured_parts)}.]"
             )
         else:
             context_lines.append(
