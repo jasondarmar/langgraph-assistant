@@ -42,7 +42,7 @@ def _calcular_fecha(mensaje: str, fecha_actual: str) -> str | None:
         "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5, "domingo": 6,
     }
 
-    if "pasado mañana" in texto or "pasado manana" in texto:
+    if "pasado mañana" in texto or "pasado manana" in texto or "después de mañana" in texto or "despues de manana" in texto:
         return (hoy + timedelta(days=2)).strftime("%Y-%m-%d")
     elif "mañana" in texto or "manana" in texto:
         return (hoy + timedelta(days=1)).strftime("%Y-%m-%d")
