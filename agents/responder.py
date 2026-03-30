@@ -83,8 +83,13 @@ def generate_response(state: AgentState) -> AgentState:
         fecha_calculada = _calcular_fecha(mensaje, fecha_actual)
 
     datos = state.get("datos_capturados", {})
+    _null_vals_ctx = {"null", "", None}
     event_id_actual = datos.get("event_id")
+    if event_id_actual in _null_vals_ctx:
+        event_id_actual = None
     sede_actual = datos.get("sede")
+    if sede_actual in _null_vals_ctx:
+        sede_actual = None
 
     # ─── System prompt dinámico ──────────────────────────────────────────
     system_prompt = get_system_prompt(
