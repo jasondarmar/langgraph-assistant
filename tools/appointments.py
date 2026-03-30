@@ -172,17 +172,18 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
                 estado="cancelada",
                 resumen_conversacion=state.get("resumen_conversacion"),
             )
-            # Clear time-specific fields so next turn doesn't auto-recreate old appointment
-            nuevos_datos = {
-                **datos,
-                "event_id": None,
-                "fecha_cita": None,
-                "hora_cita": None,
-            }
+            estado_conv = state.get("estado_conversacion", "en_proceso")
+            is_cancel = (estado_conv == "finalizado")
+            nuevos_datos = {**datos, "event_id": None}
+            if is_cancel:
+                # Pure cancellation: clear time fields to start fresh
+                nuevos_datos["fecha_cita"] = None
+                nuevos_datos["hora_cita"] = None
+            # Modification: keep LLM's already-captured new fecha/hora
             return {
                 **state,
                 "datos_capturados": nuevos_datos,
-                "estado_conversacion": "en_proceso",
+                "estado_conversacion": estado_conv,
                 "accion_calendario": None,
             }
         else:
