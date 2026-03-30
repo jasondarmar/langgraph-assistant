@@ -89,6 +89,10 @@ async def webhook_chatwoot(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     event = body.get("event")
+    msg_type_debug = body.get("message_type")
+    sender_type_debug = body.get("sender", {}).get("type")
+    private_debug = body.get("private", False)
+    logger.info(f"[Webhook] event={event} msg_type={msg_type_debug} sender_type={sender_type_debug} private={private_debug}")
 
     # ── Conversación resuelta → limpiar sesión completa ───────────────────
     if event == "conversation_status_changed":
