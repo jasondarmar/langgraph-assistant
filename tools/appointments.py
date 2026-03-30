@@ -176,6 +176,7 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
     # ─── CREATE ──────────────────────────────────────────────────────────
     estado_conv = state.get("estado_conversacion")
     if estado_conv == "datos_completos":
+        _null_vals = {"null", "", None}
         nombre = datos.get("nombre_paciente")
         sede = datos.get("sede")
         servicio = datos.get("servicio")
@@ -183,7 +184,10 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
         fecha = datos.get("fecha_cita")
         hora = datos.get("hora_cita")
 
-        if all([nombre, sede, servicio, doctor, fecha, hora]):
+        def _valid(v: any) -> bool:
+            return v not in _null_vals
+
+        if all(_valid(v) for v in [nombre, sede, servicio, doctor, fecha, hora]):
             # Construir datetimes
             try:
                 hora_clean = hora.replace("pm", "").replace("am", "").strip()

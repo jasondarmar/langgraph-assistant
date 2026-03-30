@@ -185,10 +185,14 @@ def generate_response(state: AgentState) -> AgentState:
             else:
                 datos_merged[key] = llm_val
 
-        # Force datos_completos when all 6 required fields are present after merge
+        # Validate estado against actual data — LLM can be wrong in both directions
         _required = ("nombre_paciente", "sede", "servicio", "doctor", "fecha_cita", "hora_cita")
-        if all(datos_merged.get(f) not in _null_values for f in _required):
+        all_present = all(datos_merged.get(f) not in _null_values for f in _required)
+        if all_present:
             estado_conv = "datos_completos"
+        elif estado_conv == "datos_completos":
+            # LLM claimed datos_completos but fields are missing — override
+            estado_conv = "en_proceso"
 
         # Tokens y costo
         usage = response.response_metadata.get("token_usage", {})
