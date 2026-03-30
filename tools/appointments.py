@@ -160,10 +160,17 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
                 estado="cancelada",
                 resumen_conversacion=state.get("resumen_conversacion"),
             )
-            nuevos_datos = {**datos, "event_id": None}
+            # Clear time-specific fields so next turn doesn't auto-recreate old appointment
+            nuevos_datos = {
+                **datos,
+                "event_id": None,
+                "fecha_cita": None,
+                "hora_cita": None,
+            }
             return {
                 **state,
                 "datos_capturados": nuevos_datos,
+                "estado_conversacion": "en_proceso",
                 "accion_calendario": None,
             }
         else:
@@ -176,6 +183,12 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
     # ─── CREATE ──────────────────────────────────────────────────────────
     estado_conv = state.get("estado_conversacion")
     if estado_conv == "datos_completos":
+        # Skip create if user already has an active appointment (event_id set)
+        # They must cancel first before a new one can be created
+        existing_event_id = datos.get("event_id")
+        if existing_event_id and existing_event_id not in {"null", "", None}:
+            logger.info(f"[Calendar] Skipping create — cita activa existente: {existing_event_id}")
+            return state
         _null_vals = {"null", "", None}
         nombre = datos.get("nombre_paciente")
         sede = datos.get("sede")
