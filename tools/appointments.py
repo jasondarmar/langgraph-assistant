@@ -136,20 +136,119 @@ def delete_appointment(event_id: str) -> bool:
         return False
 
 
+_NULL_VALS = {"null", "", None}
+
+
+async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
+    """
+    Intenta crear la cita en Calendar y guardarla en DB.
+    Retorna el estado actualizado o None si faltan campos o falla sin recuperación.
+    """
+    nombre = datos.get("nombre_paciente")
+    sede = datos.get("sede")
+    servicio = datos.get("servicio")
+    doctor = datos.get("doctor")
+    fecha = datos.get("fecha_cita")
+    hora = datos.get("hora_cita")
+
+    missing = [k for k, v in {
+        "nombre": nombre, "sede": sede, "servicio": servicio,
+        "doctor": doctor, "fecha": fecha, "hora": hora,
+    }.items() if v in _NULL_VALS]
+
+    if missing:
+        logger.warning(f"[Calendar] _execute_create: campos faltantes {missing} — abortando")
+        return None
+
+    try:
+        hora_lower = hora.lower().strip()
+        hora_clean = hora_lower.replace("pm", "").replace("am", "").strip()
+        if hora_clean.count(":") == 2:
+            hora_clean = hora_clean.rsplit(":", 1)[0]
+        if ":" not in hora_clean:
+            hora_clean += ":00"
+        dt_start = datetime.strptime(f"{fecha} {hora_clean}", "%Y-%m-%d %H:%M")
+        if "pm" in hora_lower and dt_start.hour < 12:
+            dt_start = dt_start.replace(hour=dt_start.hour + 12)
+        dt_end = dt_start + timedelta(hours=1)
+        start_iso = dt_start.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
+        end_iso = dt_end.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
+
+        # Verificar disponibilidad
+        existing = get_availability(start_iso, end_iso)
+        for ev in existing:
+            if ev.get("summary", "").endswith(doctor):
+                logger.warning(f"[Calendar] Doctor {doctor} no disponible en {start_iso}")
+                return {
+                    **state,
+                    "datos_capturados": datos,
+                    "error": f"Doctor {doctor} no disponible en ese horario",
+                    "respuesta": (
+                        f"Lamentablemente el {doctor} no está disponible en ese horario. "
+                        "¿Quieres elegir otro horario? 😊"
+                    ),
+                }
+
+        summary_ev = f"{sede} - {nombre} - {servicio} - {doctor}"
+        description = f"Sede: {sede} | Paciente: {nombre} | Servicio: {servicio} | Doctor: {doctor}"
+        created = create_appointment(summary_ev, description, start_iso, end_iso)
+
+        if not created:
+            return None
+
+        new_event_id = created.get("id")
+        inbox_id = state.get("inbox_id")
+        tenant = await get_tenant_by_inbox_id(inbox_id) if inbox_id else None
+        if tenant:
+            await save_appointment(
+                tenant_id=tenant["id"],
+                wa_id=state.get("wa_id", ""),
+                nombre_paciente=nombre,
+                sede=sede,
+                servicio=servicio,
+                doctor=doctor,
+                fecha_cita=fecha,
+                hora_cita=hora,
+                event_id=new_event_id,
+                resumen_conversacion=state.get("resumen_conversacion"),
+                modelo_usado=state.get("modelo_usado"),
+                tokens_entrada=state.get("tokens_entrada", 0),
+                tokens_salida=state.get("tokens_salida", 0),
+                costo_estimado=state.get("costo_estimado", 0.0),
+            )
+        else:
+            logger.warning(
+                f"[DB] Tenant no encontrado para inbox_id={inbox_id} — cita no registrada en DB."
+            )
+
+        return {
+            **state,
+            "datos_capturados": {**datos, "event_id": new_event_id},
+            "estado_conversacion": "finalizado",
+        }
+
+    except Exception as e:
+        logger.error(f"[Calendar] Error en _execute_create: {e}")
+        return {**state, "error": str(e)}
+
+
 async def handle_calendar_action(state: AgentState) -> AgentState:
     """
     Nodo que ejecuta acciones de calendario según lo que el agente indicó:
     - accion_calendario == "delete" → elimina el evento
+      - Cancelación (estado=finalizado): limpia fecha/hora y termina.
+      - Modificación (estado=en_proceso): conserva datos, actualiza fecha con
+        fecha_calculada si está disponible, e intenta crear la nueva cita
+        inmediatamente en el mismo turno para evitar loops de conversación.
     - datos_capturados completos + estado == "datos_completos" → crea la cita
     """
     accion = state.get("accion_calendario")
     datos = state.get("datos_capturados", {})
 
     # ─── DELETE ──────────────────────────────────────────────────────────
-    _null_vals_delete = {"null", "", None}
     if accion == "delete":
         event_id = datos.get("event_id")
-        if not event_id or event_id in _null_vals_delete:
+        if not event_id or event_id in _NULL_VALS:
             intent = state.get("intent", "")
             if intent in ("cancelar_cita", "modificar_cita"):
                 logger.warning("[Calendar] accion=delete sin event_id en flujo cancel/modify — limpiando sesión")
@@ -165,133 +264,131 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
                 return {**state, "accion_calendario": None}
 
         success = delete_appointment(event_id)
-        if success:
-            # Registrar cancelación en DB
-            await update_appointment_estado(
-                event_id=event_id,
-                estado="cancelada",
-                resumen_conversacion=state.get("resumen_conversacion"),
-            )
-            estado_conv = state.get("estado_conversacion", "en_proceso")
-            is_cancel = (estado_conv == "finalizado")
-            nuevos_datos = {**datos, "event_id": None}
-            if is_cancel:
-                # Pure cancellation: clear time fields to start fresh
-                nuevos_datos["fecha_cita"] = None
-                nuevos_datos["hora_cita"] = None
-            # Modification: keep LLM's already-captured new fecha/hora
-            return {
-                **state,
-                "datos_capturados": nuevos_datos,
-                "estado_conversacion": estado_conv,
-                "accion_calendario": None,
-            }
-        else:
+        if not success:
             return {
                 **state,
                 "error": f"No se pudo eliminar el evento {event_id}",
                 "accion_calendario": None,
             }
 
+        await update_appointment_estado(
+            event_id=event_id,
+            estado="cancelada",
+            resumen_conversacion=state.get("resumen_conversacion"),
+        )
+
+        estado_conv = state.get("estado_conversacion", "en_proceso")
+        is_cancel = (estado_conv == "finalizado")
+        nuevos_datos = {**datos, "event_id": None}
+
+        if is_cancel:
+            # Pure cancellation: clear booking fields to start fresh
+            nuevos_datos["fecha_cita"] = None
+            nuevos_datos["hora_cita"] = None
+            return {
+                **state,
+                "datos_capturados": nuevos_datos,
+                "estado_conversacion": estado_conv,
+                "accion_calendario": None,
+            }
+
+        # ── Modification path ────────────────────────────────────────────
+        logger.info(
+            f"[Calendar] Modificación: iniciando reagendamiento. "
+            f"datos={{{', '.join(f'{k}={v}' for k, v in nuevos_datos.items() if k != 'event_id')}}}"
+        )
+
+        # Override stale fecha_cita with fecha_calculada when available.
+        # The LLM often retains the old appointment date in datos_capturados
+        # during the confirmation turn; fecha_calculada is computed from the
+        # user's original message ("para el jueves") and is always correct.
+        fecha_calculada = state.get("fecha_calculada")
+        if fecha_calculada and fecha_calculada not in _NULL_VALS:
+            logger.info(
+                f"[Calendar] Modificación: actualizando fecha_cita "
+                f"{nuevos_datos.get('fecha_cita')} → {fecha_calculada}"
+            )
+            nuevos_datos["fecha_cita"] = fecha_calculada
+
+        nombre = nuevos_datos.get("nombre_paciente", "")
+
+        # Attempt immediate create so the user doesn't need another message turn
+        state_for_create = {
+            **state,
+            "datos_capturados": nuevos_datos,
+            "estado_conversacion": "datos_completos",
+            "accion_calendario": None,
+        }
+        result = await _execute_create(state_for_create, nuevos_datos)
+        if result is not None:
+            if result.get("error") is None:
+                # Successful immediate create — add a clear confirmation message
+                fecha = nuevos_datos.get("fecha_cita", "")
+                hora = nuevos_datos.get("hora_cita", "")
+                doctor = nuevos_datos.get("doctor", "")
+                sede = nuevos_datos.get("sede", "")
+                result["respuesta"] = (
+                    f"¡Listo, {nombre}! Tu cita ha sido reagendada para el {fecha} "
+                    f"a las {hora} con {doctor} en la sede {sede}. 😊"
+                )
+                logger.info("[Calendar] Modificación completada: delete + create en un solo turno")
+            else:
+                # Create failed with error (e.g. doctor not available) — inform user
+                logger.warning(f"[Calendar] Modificación: create falló con error: {result.get('error')}")
+            return result
+
+        # If immediate create couldn't run (missing fields), fall back to normal flow
+        # Override the LLM response so the user knows what happened
+        missing = [k for k, v in {
+            "nombre": nuevos_datos.get("nombre_paciente"),
+            "sede": nuevos_datos.get("sede"),
+            "servicio": nuevos_datos.get("servicio"),
+            "doctor": nuevos_datos.get("doctor"),
+            "fecha": nuevos_datos.get("fecha_cita"),
+            "hora": nuevos_datos.get("hora_cita"),
+        }.items() if v in _NULL_VALS]
+        logger.warning(
+            f"[Calendar] Modificación: create inmediato falló — campos faltantes: {missing}"
+        )
+        return {
+            **state,
+            "datos_capturados": nuevos_datos,
+            "estado_conversacion": "en_proceso",
+            "accion_calendario": None,
+            "respuesta": (
+                f"Tu cita anterior ha sido cancelada exitosamente, {nombre}. "
+                "Ahora vamos a reagendar. "
+                + (f"Solo necesito que me confirmes: {'la ' if len(missing) == 1 else ''}"
+                   f"{', '.join(missing)}. 😊"
+                   if missing else
+                   "¿Puedes confirmarme los datos para la nueva cita? 😊")
+            ),
+        }
+
     # ─── CREATE ──────────────────────────────────────────────────────────
     estado_conv = state.get("estado_conversacion")
     if estado_conv == "datos_completos":
         # Skip create if user already has an active appointment (event_id set)
-        # They must cancel first before a new one can be created
         existing_event_id = datos.get("event_id")
-        if existing_event_id and existing_event_id not in {"null", "", None}:
+        if existing_event_id and existing_event_id not in _NULL_VALS:
             logger.info(f"[Calendar] Skipping create — cita activa existente: {existing_event_id}")
             return state
-        _null_vals = {"null", "", None}
-        nombre = datos.get("nombre_paciente")
-        sede = datos.get("sede")
-        servicio = datos.get("servicio")
-        doctor = datos.get("doctor")
-        fecha = datos.get("fecha_cita")
-        hora = datos.get("hora_cita")
 
-        def _valid(v: any) -> bool:
-            return v not in _null_vals
+        missing = [k for k, v in {
+            "nombre": datos.get("nombre_paciente"),
+            "sede": datos.get("sede"),
+            "servicio": datos.get("servicio"),
+            "doctor": datos.get("doctor"),
+            "fecha": datos.get("fecha_cita"),
+            "hora": datos.get("hora_cita"),
+        }.items() if v in _NULL_VALS]
 
-        missing = [k for k, v in {"nombre": nombre, "sede": sede, "servicio": servicio,
-                                    "doctor": doctor, "fecha": fecha, "hora": hora}.items()
-                   if not _valid(v)]
         if missing:
             logger.warning(f"[Calendar] datos_completos pero campos inválidos: {missing} — abortando create")
             return {**state, "estado_conversacion": "en_proceso"}
 
-        if all(_valid(v) for v in [nombre, sede, servicio, doctor, fecha, hora]):
-            # Construir datetimes
-            try:
-                hora_clean = hora.replace("pm", "").replace("am", "").strip()
-                # Strip seconds if present: "14:00:00" → "14:00"
-                if hora_clean.count(":") == 2:
-                    hora_clean = hora_clean.rsplit(":", 1)[0]
-                if ":" not in hora_clean:
-                    hora_clean += ":00"
-                # Manejar PM/AM
-                hora_lower = hora.lower()
-                dt_start = datetime.strptime(f"{fecha} {hora_clean}", "%Y-%m-%d %H:%M")
-                if "pm" in hora_lower and dt_start.hour < 12:
-                    dt_start = dt_start.replace(hour=dt_start.hour + 12)
-                dt_end = dt_start + timedelta(hours=1)
-
-                start_iso = dt_start.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
-                end_iso = dt_end.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
-
-                # Primero verificar disponibilidad
-                existing = get_availability(start_iso, end_iso)
-                for ev in existing:
-                    if ev.get("summary", "").endswith(doctor):
-                        logger.warning(
-                            f"[Calendar] Doctor {doctor} no disponible en {start_iso}"
-                        )
-                        return {
-                            **state,
-                            "error": f"Doctor {doctor} no disponible en ese horario",
-                        }
-
-                # Crear evento
-                summary = f"{sede} - {nombre} - {servicio} - {doctor}"
-                description = (
-                    f"Sede: {sede} | Paciente: {nombre} | "
-                    f"Servicio: {servicio} | Doctor: {doctor}"
-                )
-                created = create_appointment(summary, description, start_iso, end_iso)
-
-                if created:
-                    new_event_id = created.get("id")
-                    # Guardar cita en DB (identificar tenant por inbox_id)
-                    inbox_id = state.get("inbox_id")
-                    tenant = await get_tenant_by_inbox_id(inbox_id) if inbox_id else None
-                    if tenant:
-                        await save_appointment(
-                            tenant_id=tenant["id"],
-                            wa_id=state.get("wa_id", ""),
-                            nombre_paciente=nombre,
-                            sede=sede,
-                            servicio=servicio,
-                            doctor=doctor,
-                            fecha_cita=fecha,
-                            hora_cita=hora,
-                            event_id=new_event_id,
-                            resumen_conversacion=state.get("resumen_conversacion"),
-                            modelo_usado=state.get("modelo_usado"),
-                            tokens_entrada=state.get("tokens_entrada", 0),
-                            tokens_salida=state.get("tokens_salida", 0),
-                            costo_estimado=state.get("costo_estimado", 0.0),
-                        )
-                    else:
-                        logger.warning(f"[DB] Tenant no encontrado para inbox_id={inbox_id} — cita no registrada en DB.")
-                    nuevos_datos = {**datos, "event_id": new_event_id}
-                    return {
-                        **state,
-                        "datos_capturados": nuevos_datos,
-                        "estado_conversacion": "finalizado",
-                    }
-
-            except Exception as e:
-                logger.error(f"[Calendar] Error creando cita: {e}")
-                return {**state, "error": str(e)}
+        result = await _execute_create(state, datos)
+        if result is not None:
+            return result
 
     return state

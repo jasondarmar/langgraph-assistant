@@ -78,9 +78,13 @@ def generate_response(state: AgentState) -> AgentState:
     mensaje = state.get("mensaje_actual", "")
     fecha_calculada = state.get("fecha_calculada")
 
-    # Intentar calcular fecha si no está calculada
-    if mensaje and not fecha_calculada:
-        fecha_calculada = _calcular_fecha(mensaje, fecha_actual)
+    # Siempre recalcular fecha desde el mensaje actual (puede haber cambiado,
+    # ej: "cámbiala para el viernes" cuando fecha_calculada era sábado).
+    # Solo conservar la fecha de sesión si el mensaje actual no menciona fecha.
+    if mensaje:
+        nueva_fecha = _calcular_fecha(mensaje, fecha_actual)
+        if nueva_fecha:
+            fecha_calculada = nueva_fecha
 
     datos = state.get("datos_capturados", {})
     _null_vals_ctx = {"null", "", None}
@@ -116,9 +120,13 @@ def generate_response(state: AgentState) -> AgentState:
         context_lines.append(
             f"[CITA ACTIVA — event_id: {event_id_actual}. "
             "El paciente YA tiene una cita agendada con los datos que aparecen abajo. "
-            "Si el paciente quiere MODIFICAR o CANCELAR: usa accion_calendario: delete. "
-            "Si el paciente quiere agendar una cita DIFERENTE: primero debes cancelar la actual con delete, luego recolecta los nuevos datos desde cero. "
-            "NO uses los datos de la cita actual para una nueva reserva sin cancelar primero. "
+            "PROCESO DE 2 PASOS — Si el paciente quiere MODIFICAR o CANCELAR: "
+            "PASO 1: Muestra los datos de la cita actual y pide confirmación explícita. Retorna accion_calendario: null. "
+            "PASO 2: SOLO cuando el paciente confirme explícitamente (ej: 'sí', 'dale', 'cambiala'), ENTONCES usa accion_calendario: delete. "
+            "NUNCA hagas delete sin confirmación explícita del paciente. "
+            "Para MODIFICACIÓN: usa estado: en_proceso (el sistema reagenda automáticamente). "
+            "Para CANCELACIÓN: usa estado: finalizado. "
+            "Si el paciente quiere agendar una cita DIFERENTE: primero cancela la actual con delete (tras confirmar), luego recolecta los nuevos datos. "
             "Si el paciente está hablando de otro tema: responde normalmente.]"
         )
     if sede_actual:
