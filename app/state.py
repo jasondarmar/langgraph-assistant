@@ -36,7 +36,8 @@ class AgentState(TypedDict, total=False):
     human_mode: bool
     fecha_actual: str             # YYYY-MM-DD
     fecha_actual_texto: str       # "martes 25 de marzo de 2026"
-    fecha_calculada: Optional[str]
+    fecha_calculada: Optional[str]       # persiste en sesión entre turnos
+    fecha_calculada_turno: Optional[str]  # solo del turno actual, no persiste
     datos_capturados: DatosCita
 
     # ─── Salida del agente ───────────────────────────────────────────────

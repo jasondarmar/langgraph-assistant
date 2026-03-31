@@ -303,17 +303,27 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
             f"datos={{{', '.join(f'{k}={v}' for k, v in nuevos_datos.items() if k != 'event_id')}}}"
         )
 
-        # Override stale fecha_cita with fecha_calculada when available.
-        # The LLM often retains the old appointment date in datos_capturados
-        # during the confirmation turn; fecha_calculada is computed from the
-        # user's original message ("para el jueves") and is always correct.
-        fecha_calculada = state.get("fecha_calculada")
-        if fecha_calculada and fecha_calculada not in _NULL_VALS:
+        # Solo sobreescribir fecha_cita si el usuario mencionó una fecha
+        # explícitamente en ESTE turno (fecha_calculada_turno).
+        # Si el usuario solo cambió la hora ("el mismo sábado pero más temprano"),
+        # fecha_calculada_turno será None y respetamos la fecha que ya está en datos.
+        # Usar la fecha de sesión (fecha_calculada) solo como último recurso
+        # cuando fecha_cita está completamente vacía.
+        fecha_calculada_turno = state.get("fecha_calculada_turno")
+        if fecha_calculada_turno and fecha_calculada_turno not in _NULL_VALS:
             logger.info(
-                f"[Calendar] Modificación: actualizando fecha_cita "
-                f"{nuevos_datos.get('fecha_cita')} → {fecha_calculada}"
+                f"[Calendar] Modificación: fecha explícita en este turno "
+                f"{nuevos_datos.get('fecha_cita')} → {fecha_calculada_turno}"
             )
-            nuevos_datos["fecha_cita"] = fecha_calculada
+            nuevos_datos["fecha_cita"] = fecha_calculada_turno
+        elif nuevos_datos.get("fecha_cita") in _NULL_VALS:
+            # fecha_cita está vacía — intentar con la de sesión como fallback
+            fecha_calculada = state.get("fecha_calculada")
+            if fecha_calculada and fecha_calculada not in _NULL_VALS:
+                logger.info(
+                    f"[Calendar] Modificación: fecha_cita vacía, usando sesión: {fecha_calculada}"
+                )
+                nuevos_datos["fecha_cita"] = fecha_calculada
 
         nombre = nuevos_datos.get("nombre_paciente", "")
 

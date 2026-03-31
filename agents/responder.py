@@ -86,13 +86,15 @@ def generate_response(state: AgentState) -> AgentState:
     mensaje = state.get("mensaje_actual", "")
     fecha_calculada = state.get("fecha_calculada")
 
-    # Siempre recalcular fecha desde el mensaje actual (puede haber cambiado,
-    # ej: "cámbiala para el viernes" cuando fecha_calculada era sábado).
-    # Solo conservar la fecha de sesión si el mensaje actual no menciona fecha.
+    # Recalcular desde el mensaje actual. Si detecta una fecha, actualiza
+    # fecha_calculada y marca fecha_calculada_turno para que handle_calendar_action
+    # sepa que la fecha viene del usuario en ESTE turno (no de sesión anterior).
+    fecha_calculada_turno = None
     if mensaje:
         nueva_fecha = _calcular_fecha(mensaje, fecha_actual)
         if nueva_fecha:
             fecha_calculada = nueva_fecha
+            fecha_calculada_turno = nueva_fecha
 
     datos = state.get("datos_capturados", {})
     _null_vals_ctx = {"null", "", None}
@@ -248,6 +250,7 @@ def generate_response(state: AgentState) -> AgentState:
             "fecha_actual": fecha_actual,
             "fecha_actual_texto": fecha_actual_texto,
             "fecha_calculada": fecha_calculada,
+            "fecha_calculada_turno": fecha_calculada_turno,
             "respuesta": respuesta,
             "estado_conversacion": estado_conv,
             "datos_capturados": datos_merged,

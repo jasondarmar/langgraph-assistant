@@ -65,6 +65,7 @@ def parse_input(state: AgentState) -> AgentState:
         "active_session": session_data.get("active_session", False),
         "fecha_calculada": session_data.get("fecha_calculada"),
         "costo_acumulado": session_data.get("costo_acumulado", 0.0),
+        "fecha_calculada_turno": None,  # se calcula en responder, no persiste
         "fecha_actual": fecha_actual,
         "fecha_actual_texto": fecha_actual_texto,
         "skip_llm": False,
@@ -134,13 +135,15 @@ def save_session_node(state: AgentState) -> AgentState:
     # Acumular costo del turno; resetear cuando la conversación finaliza
     if estado_conv == "finalizado":
         nuevo_costo_acumulado = 0.0
+        fecha_calculada_guardar = None  # evita que fechas viejas contaminen la próxima conversación
     else:
         nuevo_costo_acumulado = costo_prev + costo_turno
+        fecha_calculada_guardar = state.get("fecha_calculada")
     update_session_data(wa_id, {
         "datos_capturados": state.get("datos_capturados", {}),
         "human_mode": state.get("requiere_humano", False),
         "active_session": estado_conv not in ("finalizado",),
-        "fecha_calculada": state.get("fecha_calculada"),
+        "fecha_calculada": fecha_calculada_guardar,
         "costo_acumulado": nuevo_costo_acumulado,
     })
 
