@@ -104,7 +104,7 @@ async def send_response_node(state: AgentState) -> AgentState:
                 },
             )
             resp.raise_for_status()
-        logger.info(f"[Send] Respuesta enviada a conv {conv_id}: {respuesta[:60]}")
+        logger.info(f"[Send] Respuesta enviada a conv {conv_id}: {respuesta[:200]}")
     except Exception as e:
         logger.error(f"[Send] Error enviando respuesta: {e}")
         return {**state, "error": str(e)}

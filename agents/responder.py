@@ -49,13 +49,21 @@ def _calcular_fecha(mensaje: str, fecha_actual: str) -> str | None:
     elif "hoy" in texto:
         return fecha_actual
     else:
+        # Recopilar TODAS las menciones de días con su posición en el texto.
+        # Retornar el ÚLTIMO mencionado — en frases como "no es el miércoles,
+        # es el sábado" el día correcto siempre viene al final.
+        matches = []
         for dia, num in dias_semana.items():
-            if dia in texto:
+            pos = texto.rfind(dia)
+            if pos >= 0:
                 hoy_num = hoy.weekday()
                 dias_hasta = num - hoy_num
                 if dias_hasta <= 0:
                     dias_hasta += 7
-                return (hoy + timedelta(days=dias_hasta)).strftime("%Y-%m-%d")
+                matches.append((pos, (hoy + timedelta(days=dias_hasta)).strftime("%Y-%m-%d")))
+        if matches:
+            matches.sort(key=lambda x: x[0])
+            return matches[-1][1]
     return None
 
 
