@@ -49,7 +49,8 @@ class AgentState(TypedDict, total=False):
     modelo_usado: Optional[str]
     tokens_entrada: int
     tokens_salida: int
-    costo_estimado: float
+    costo_estimado: float         # costo del turno actual
+    costo_acumulado: float        # suma de todos los turnos de la conversación
 
     # ─── Control de flujo ────────────────────────────────────────────────
     error: Optional[str]

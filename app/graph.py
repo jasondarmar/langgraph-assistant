@@ -64,6 +64,7 @@ def parse_input(state: AgentState) -> AgentState:
         "human_mode": session_data.get("human_mode", False),
         "active_session": session_data.get("active_session", False),
         "fecha_calculada": session_data.get("fecha_calculada"),
+        "costo_acumulado": session_data.get("costo_acumulado", 0.0),
         "fecha_actual": fecha_actual,
         "fecha_actual_texto": fecha_actual_texto,
         "skip_llm": False,
@@ -128,11 +129,19 @@ def save_session_node(state: AgentState) -> AgentState:
 
     # Actualizar datos de sesión
     estado_conv = state.get("estado_conversacion", "en_proceso")
+    costo_turno = state.get("costo_estimado", 0.0)
+    costo_prev = state.get("costo_acumulado", 0.0)
+    # Acumular costo del turno; resetear cuando la conversación finaliza
+    if estado_conv == "finalizado":
+        nuevo_costo_acumulado = 0.0
+    else:
+        nuevo_costo_acumulado = costo_prev + costo_turno
     update_session_data(wa_id, {
         "datos_capturados": state.get("datos_capturados", {}),
         "human_mode": state.get("requiere_humano", False),
         "active_session": estado_conv not in ("finalizado",),
         "fecha_calculada": state.get("fecha_calculada"),
+        "costo_acumulado": nuevo_costo_acumulado,
     })
 
     logger.info(f"[Session] Sesión guardada para wa_id={wa_id}")

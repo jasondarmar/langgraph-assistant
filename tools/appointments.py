@@ -200,6 +200,11 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
         inbox_id = state.get("inbox_id")
         tenant = await get_tenant_by_inbox_id(inbox_id) if inbox_id else None
         if tenant:
+            # costo_acumulado incluye todos los turnos de la conversación;
+            # si no está disponible, usamos solo el del turno actual como fallback
+            costo_total = state.get("costo_acumulado") or state.get("costo_estimado", 0.0)
+            # Sumar el turno actual al acumulado (aún no se sumó en save_session_node)
+            costo_total += state.get("costo_estimado", 0.0)
             await save_appointment(
                 tenant_id=tenant["id"],
                 wa_id=state.get("wa_id", ""),
@@ -214,7 +219,7 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
                 modelo_usado=state.get("modelo_usado"),
                 tokens_entrada=state.get("tokens_entrada", 0),
                 tokens_salida=state.get("tokens_salida", 0),
-                costo_estimado=state.get("costo_estimado", 0.0),
+                costo_estimado=costo_total,
             )
         else:
             logger.warning(

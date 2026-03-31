@@ -125,6 +125,7 @@ def get_session_data(wa_id: str) -> dict:
                     "human_mode": False,
                     "active_session": False,
                     "fecha_calculada": None,
+                    "costo_acumulado": 0.0,
                 }
         except Exception:
             pass
@@ -134,6 +135,7 @@ def get_session_data(wa_id: str) -> dict:
         "human_mode": session.get("human_mode", False),
         "active_session": session.get("active_session", False),
         "fecha_calculada": session.get("fecha_calculada"),
+        "costo_acumulado": session.get("costo_acumulado", 0.0),
     }
 
 
