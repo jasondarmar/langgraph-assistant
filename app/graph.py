@@ -164,6 +164,17 @@ def route_after_classify(state: AgentState) -> str:
     return "respond"
 
 
+def human_mode_response_node(state: AgentState) -> AgentState:
+    """Cuando human_mode está activo, avisa al usuario que un agente humano lo atiende."""
+    return {
+        **state,
+        "respuesta": (
+            "Tu solicitud ya está siendo atendida por nuestro equipo. "
+            "En breve te contactamos. 😊"
+        ),
+    }
+
+
 def route_after_respond(state: AgentState) -> str:
     accion = state.get("accion_calendario")
     estado = state.get("estado_conversacion")
@@ -187,14 +198,15 @@ def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
     # Nodos
-    graph.add_node("parse",    parse_input)
-    graph.add_node("transcribe", transcribe_audio_node)
-    graph.add_node("classify", classify_intent)
-    graph.add_node("respond",  generate_response)
-    graph.add_node("calendar", handle_calendar_action)
-    graph.add_node("send",     send_response_node)
-    graph.add_node("escalate", escalate_to_human)
-    graph.add_node("save",     save_session_node)
+    graph.add_node("parse",       parse_input)
+    graph.add_node("transcribe",  transcribe_audio_node)
+    graph.add_node("classify",    classify_intent)
+    graph.add_node("human_mode",  human_mode_response_node)
+    graph.add_node("respond",     generate_response)
+    graph.add_node("calendar",    handle_calendar_action)
+    graph.add_node("send",        send_response_node)
+    graph.add_node("escalate",    escalate_to_human)
+    graph.add_node("save",        save_session_node)
 
     # Entry point
     graph.set_entry_point("parse")
@@ -206,9 +218,10 @@ def build_graph() -> StateGraph:
     })
     graph.add_edge("transcribe", "classify")
     graph.add_conditional_edges("classify", route_after_classify, {
-        "respond": "respond",
-        "send":    "send",
+        "respond":     "respond",
+        "send":        "human_mode",
     })
+    graph.add_edge("human_mode", "send")
     graph.add_conditional_edges("respond",  route_after_respond, {
         "calendar": "calendar",
         "send":     "send",

@@ -210,6 +210,10 @@ def generate_response(state: AgentState) -> AgentState:
         requiere_humano = parsed.get("requiere_humano", False)
         resumen = parsed.get("resumen_conversacion", "")
 
+        # Garantía programática: emergencia siempre escala, sin importar lo que diga el LLM
+        if intent == "emergencia":
+            requiere_humano = True
+
         # Merge: preserve existing session values for fields where LLM returned null
         _null_values: set = {"null", "", None}
         datos_merged: DatosCita = {}

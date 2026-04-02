@@ -34,7 +34,17 @@ async def escalate_to_human(state: AgentState) -> AgentState:
         return state
 
     conv_id = state.get("conversation_id")
-    resumen = state.get("resumen_conversacion", "Sin resumen disponible.")
+    resumen = state.get("resumen_conversacion", "").strip()
+    if not resumen:
+        # Fallback: construir resumen básico con los datos capturados
+        datos = state.get("datos_capturados", {})
+        intent = state.get("intent", "desconocida")
+        nombre = datos.get("nombre_paciente", "desconocido")
+        resumen = (
+            f"Intención detectada: {intent}. "
+            f"Paciente: {nombre}. "
+            "No se generó resumen automático — revisar historial de la conversación."
+        )
 
     if not conv_id:
         logger.error("[Escalation] conversation_id es None, no se puede escalar")
