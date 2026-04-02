@@ -34,6 +34,20 @@ def parse_input(state: AgentState) -> AgentState:
     session_data = get_session_data(wa_id)
     historial_texto = get_history_text(wa_id)
 
+    # Si es una nueva conversación (distinto conv_id que la anterior),
+    # resetear human_mode para evitar heredar estado de conversación anterior.
+    # Esto cubre el caso donde el webhook status→resolved no dispara.
+    conv_id = state.get("conversation_id")
+    from app.memory import get_session
+    session = get_session(wa_id)
+    prev_conv_id = session.get("_last_conversation_id")
+    if conv_id and prev_conv_id and conv_id != prev_conv_id:
+        logger.info(
+            f"[Parser] Nueva conversación detectada: {prev_conv_id} → {conv_id} "
+            f"para wa_id={wa_id}. Reseteando human_mode."
+        )
+        session_data["human_mode"] = False
+
     # Determinar mensaje actual
     raw_content = state.get("raw_content", "")
     audio_url = state.get("audio_url")
@@ -142,12 +156,14 @@ def save_session_node(state: AgentState) -> AgentState:
     # human_mode: se activa cuando requiere_humano=True, pero NUNCA se desactiva
     # desde aquí — solo reset_human_mode() (webhook status→open) puede hacerlo.
     nuevo_human_mode = state.get("human_mode", False) or state.get("requiere_humano", False)
+    conv_id = state.get("conversation_id")
     update_session_data(wa_id, {
         "datos_capturados": state.get("datos_capturados", {}),
         "human_mode": nuevo_human_mode,
         "active_session": estado_conv not in ("finalizado",),
         "fecha_calculada": fecha_calculada_guardar,
         "costo_acumulado": nuevo_costo_acumulado,
+        "_last_conversation_id": conv_id,  # Detectar cambios de conversación
     })
 
     logger.info(f"[Session] Sesión guardada para wa_id={wa_id}")
