@@ -168,14 +168,10 @@ def route_after_classify(state: AgentState) -> str:
 
 
 def human_mode_response_node(state: AgentState) -> AgentState:
-    """Cuando human_mode está activo, avisa al usuario que un agente humano lo atiende."""
-    return {
-        **state,
-        "respuesta": (
-            "Tu solicitud ya está siendo atendida por nuestro equipo. "
-            "En breve te contactamos. 😊"
-        ),
-    }
+    """Cuando human_mode está activo, el bot se mantiene completamente silencioso.
+    El mensaje de aviso al usuario ya fue enviado en el turno de escalación.
+    send_response_node omite el envío si respuesta está vacía."""
+    return {**state, "respuesta": None}
 
 
 def route_after_respond(state: AgentState) -> str:
