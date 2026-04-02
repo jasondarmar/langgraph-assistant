@@ -139,9 +139,12 @@ def save_session_node(state: AgentState) -> AgentState:
     else:
         nuevo_costo_acumulado = costo_prev + costo_turno
         fecha_calculada_guardar = state.get("fecha_calculada")
+    # human_mode: se activa cuando requiere_humano=True, pero NUNCA se desactiva
+    # desde aquí — solo reset_human_mode() (webhook status→open) puede hacerlo.
+    nuevo_human_mode = state.get("human_mode", False) or state.get("requiere_humano", False)
     update_session_data(wa_id, {
         "datos_capturados": state.get("datos_capturados", {}),
-        "human_mode": state.get("requiere_humano", False),
+        "human_mode": nuevo_human_mode,
         "active_session": estado_conv not in ("finalizado",),
         "fecha_calculada": fecha_calculada_guardar,
         "costo_acumulado": nuevo_costo_acumulado,
