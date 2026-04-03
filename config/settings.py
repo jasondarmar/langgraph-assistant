@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     environment: str = Field("development", env="ENVIRONMENT")  # development | production
     test_token: str = Field("", env="TEST_TOKEN")  # Token para /test/message en desarrollo
 
+    # ─── Security (FASE 2) ───────────────────────────────────────────────
+    encryption_master_key: str = Field("", env="ENCRYPTION_MASTER_KEY")  # AES-256 key
+    gdpr_token: str = Field("", env="GDPR_TOKEN")  # Token para /gdpr/delete-user
+
     # ─── Zona horaria ────────────────────────────────────────────────────
     timezone: str = Field("America/Bogota", env="TIMEZONE")
 
