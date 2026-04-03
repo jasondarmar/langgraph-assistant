@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     chatwoot_base_url: str = Field(..., env="CHATWOOT_BASE_URL")
     chatwoot_api_token: str = Field(..., env="CHATWOOT_API_TOKEN")
     chatwoot_account_id: int = Field(1, env="CHATWOOT_ACCOUNT_ID")
+    chatwoot_webhook_secret: str = Field("", env="CHATWOOT_WEBHOOK_SECRET")
 
     # ─── WhatsApp / Meta ─────────────────────────────────────────────────
     whatsapp_token: str = Field(..., env="WHATSAPP_TOKEN")
@@ -44,6 +45,8 @@ class Settings(BaseSettings):
     app_port: int = Field(8001, env="APP_PORT")
     debug: bool = Field(False, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")
+    environment: str = Field("development", env="ENVIRONMENT")  # development | production
+    test_token: str = Field("", env="TEST_TOKEN")  # Token para /test/message en desarrollo
 
     # ─── Zona horaria ────────────────────────────────────────────────────
     timezone: str = Field("America/Bogota", env="TIMEZONE")

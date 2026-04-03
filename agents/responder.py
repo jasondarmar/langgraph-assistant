@@ -11,6 +11,7 @@ import pytz
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 from app.state import AgentState, DatosCita
+from app.security import sanitize_for_prompt
 from agents.llm_router import get_model_for_intent, log_cost
 from config.prompts import get_system_prompt
 from config.settings import get_settings
@@ -158,9 +159,11 @@ def generate_response(state: AgentState) -> AgentState:
         context_lines.append(
             f"[FECHA CALCULADA PARA LA CITA: {fecha_calculada}. USA ESTA FECHA EXACTA.]"
         )
-    if event_id_actual:
+    # Sanitizar event_id antes de inyectar en prompt (prevenir inyección)
+    event_id_safe = sanitize_for_prompt(event_id_actual, max_length=255) if event_id_actual else None
+    if event_id_safe:
         context_lines.append(
-            f"[CITA ACTIVA — event_id: {event_id_actual}. "
+            f"[CITA ACTIVA — event_id: {event_id_safe}. "
             "El paciente YA tiene una cita agendada con los datos que aparecen abajo. "
             "PROCESO DE 2 PASOS — Si el paciente quiere MODIFICAR o CANCELAR: "
             "PASO 1: Muestra los datos de la cita actual y pide confirmación explícita. Retorna accion_calendario: null. "
@@ -171,10 +174,13 @@ def generate_response(state: AgentState) -> AgentState:
             "Si el paciente quiere agendar una cita DIFERENTE: primero cancela la actual con delete (tras confirmar), luego recolecta los nuevos datos. "
             "Si el paciente está hablando de otro tema: responde normalmente.]"
         )
-    if sede_actual:
-        context_lines.append(f"[SEDE SELECCIONADA: {sede_actual}.]")
+    # Sanitizar sede antes de inyectar
+    sede_safe = sanitize_for_prompt(sede_actual, max_length=50) if sede_actual else None
+    if sede_safe:
+        context_lines.append(f"[SEDE SELECCIONADA: {sede_safe}.]")
 
     # Inject already-captured fields so LLM doesn't re-ask for them
+    # IMPORTANTE: sanitizar todos los valores antes de inyectar en el prompt
     _null_vals = {"null", "", None}
     captured_parts = []
     for key, label in [
@@ -186,7 +192,10 @@ def generate_response(state: AgentState) -> AgentState:
     ]:
         val = datos.get(key)
         if val not in _null_vals:
-            captured_parts.append(f"{label}={val}")
+            # Sanitizar valor antes de inyectar en prompt
+            val_safe = sanitize_for_prompt(str(val), max_length=100)
+            if val_safe:
+                captured_parts.append(f"{label}={val_safe}")
     if captured_parts:
         if event_id_actual:
             context_lines.append(
