@@ -1,12 +1,17 @@
 """
 Settings — configuración centralizada desde variables de entorno.
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file="/opt/langgraph-assistant/.env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     # ─── OpenAI ──────────────────────────────────────────────────────────
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
 
@@ -54,11 +59,6 @@ class Settings(BaseSettings):
 
     # ─── Zona horaria ────────────────────────────────────────────────────
     timezone: str = Field("America/Bogota", env="TIMEZONE")
-
-    class Config:
-        env_file = "/opt/langgraph-assistant/.env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"  # Ignore extra fields from .env
 
 
 @lru_cache()
