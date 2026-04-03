@@ -56,8 +56,9 @@ class Settings(BaseSettings):
     timezone: str = Field("America/Bogota", env="TIMEZONE")
 
     class Config:
-        env_file = ".env"
+        env_file = "/opt/langgraph-assistant/.env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Ignore extra fields from .env
 
 
 @lru_cache()
