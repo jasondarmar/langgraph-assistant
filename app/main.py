@@ -8,6 +8,10 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+# Cargar .env ANTES de importar settings
+from dotenv import load_dotenv
+load_dotenv("/opt/langgraph-assistant/.env")
+
 import pytz
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
