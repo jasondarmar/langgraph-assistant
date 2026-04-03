@@ -1,0 +1,107 @@
+"""
+Encryption — AES-256 encryption/decryption para campos sensibles en DB.
+"""
+import logging
+import os
+from base64 import b64encode, b64decode
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+
+logger = logging.getLogger(__name__)
+
+
+class FieldEncryption:
+    """Encripta/desencripta campos sensibles usando Fernet (AES-128)."""
+
+    def __init__(self, master_key: str = None):
+        """
+        Inicializa con master key.
+
+        Args:
+            master_key: Key para derivar la clave de encriptación.
+                       Si es None, usa ENCRYPTION_MASTER_KEY env var.
+        """
+        if not master_key:
+            master_key = os.getenv("ENCRYPTION_MASTER_KEY")
+
+        if not master_key:
+            logger.warning(
+                "[Encryption] No ENCRYPTION_MASTER_KEY configurada - encriptación deshabilitada"
+            )
+            self.cipher = None
+            return
+
+        # Derivar clave usando PBKDF2
+        kdf = PBKDF2(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b"langgraph-assistant",  # Salt fijo para consistencia
+            iterations=100000,
+        )
+        key = b64encode(kdf.derive(master_key.encode()))
+        self.cipher = Fernet(key)
+
+    def encrypt(self, plaintext: str) -> str:
+        """
+        Encripta texto plano.
+
+        Args:
+            plaintext: Texto a encriptar
+
+        Returns:
+            Texto encriptado en base64
+        """
+        if not self.cipher:
+            logger.debug("[Encryption] Encriptación deshabilitada - retornando plaintext")
+            return plaintext
+
+        try:
+            ciphertext = self.cipher.encrypt(plaintext.encode())
+            return b64encode(ciphertext).decode()
+        except Exception as e:
+            logger.error(f"[Encryption] Error encriptando: {e}")
+            return plaintext
+
+    def decrypt(self, ciphertext: str) -> str:
+        """
+        Desencripta texto encriptado.
+
+        Args:
+            ciphertext: Texto encriptado en base64
+
+        Returns:
+            Texto desencriptado
+        """
+        if not self.cipher:
+            return ciphertext
+
+        try:
+            decoded = b64decode(ciphertext.encode())
+            plaintext = self.cipher.decrypt(decoded).decode()
+            return plaintext
+        except Exception as e:
+            logger.error(f"[Encryption] Error desencriptando: {e}")
+            return ciphertext
+
+
+# Instancia global
+_encryption_instance = None
+
+
+def get_encryption() -> FieldEncryption:
+    """Obtiene la instancia global de encriptación."""
+    global _encryption_instance
+    if _encryption_instance is None:
+        _encryption_instance = FieldEncryption()
+    return _encryption_instance
+
+
+def encrypt_field(plaintext: str) -> str:
+    """Helper para encriptar un campo."""
+    return get_encryption().encrypt(plaintext)
+
+
+def decrypt_field(ciphertext: str) -> str:
+    """Helper para desencriptar un campo."""
+    return get_encryption().decrypt(ciphertext)

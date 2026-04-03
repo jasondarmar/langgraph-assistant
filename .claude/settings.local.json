@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(curl -s -X POST http://178.156.227.221:8001/test/message -H \"Content-Type: application/json\" --data-raw '{\"\"wa_id\"\": \"\"573009999999\"\", \"\"message\"\": \"\"Hola quiero una cita\"\", \"\"conversation_id\"\": 1000}')",
+      "Bash(for msg:*)",
+      "Bash(do echo:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)\\)\")",
+      "WebFetch(domain:github.com)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
+    ]
+  }
+}

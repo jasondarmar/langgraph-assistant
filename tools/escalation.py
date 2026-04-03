@@ -5,6 +5,7 @@ Asigna la conversación, cambia estado a 'pending' y envía nota privada.
 import logging
 import httpx
 from app.state import AgentState
+from app.audit_log import AuditLogger
 from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -29,11 +30,14 @@ async def escalate_to_human(state: AgentState) -> AgentState:
     1. Asigna la conversación al agente admin (id=1)
     2. Cambia estado a 'pending'
     3. Envía nota privada con el resumen al agente
+    Registra la escalación en el audit log.
     """
     if not state.get("requiere_humano", False):
         return state
 
     conv_id = state.get("conversation_id")
+    wa_id = state.get("wa_id", "")
+    razon_escalacion = state.get("razon_escalacion", "Bot unable to handle - requires human intervention")
     resumen = state.get("resumen_conversacion", "").strip()
     if not resumen:
         # Fallback: construir resumen básico con los datos capturados
@@ -49,6 +53,13 @@ async def escalate_to_human(state: AgentState) -> AgentState:
     if not conv_id:
         logger.error("[Escalation] conversation_id es None, no se puede escalar")
         return state
+
+    # Audit logging
+    AuditLogger.log_escalation(
+        wa_id=wa_id,
+        conv_id=conv_id,
+        razon=razon_escalacion,
+    )
 
     base = _base_url()
     headers = _chatwoot_headers()

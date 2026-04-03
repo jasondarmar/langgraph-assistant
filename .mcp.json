@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "powerbi-modeling-mcp": {
+      "command": "C:\\Users\\rdpJason\\.vscode\\extensions\\analysis-services.powerbi-modeling-mcp-0.4.0-win32-x64\\server\\powerbi-modeling-mcp.exe",
+      "args": [
+        "--readwrite",
+        "--skip-confirmation"
+      ]
+    }
+  }
+}

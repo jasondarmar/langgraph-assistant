@@ -13,6 +13,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from app.state import AgentState
+from app.audit_log import AuditLogger
 from config.settings import get_settings
 from tools.db_repository import get_tenant_by_inbox_id, save_appointment, update_appointment_estado
 
@@ -205,6 +206,7 @@ def delete_appointment(event_id: str) -> bool:
     """
     Elimina un evento del calendario por su ID.
     Retorna True si fue eliminado, False si falló.
+    Registra la cancelación en el audit log.
     """
     settings = get_settings()
     try:
@@ -214,6 +216,15 @@ def delete_appointment(event_id: str) -> bool:
             eventId=event_id,
         ).execute()
         logger.info(f"[Calendar] Evento eliminado: {event_id}")
+
+        # Audit logging
+        AuditLogger.log_appointment_cancelled(
+            wa_id="system",
+            conv_id=None,
+            event_id=event_id,
+            motivo="User requested cancellation",
+        )
+
         return True
 
     except HttpError as e:
@@ -286,6 +297,8 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
 
         new_event_id = created.get("id")
         inbox_id = state.get("inbox_id")
+        wa_id = state.get("wa_id", "")
+        conv_id = state.get("conversation_id")
         tenant = await get_tenant_by_inbox_id(inbox_id) if inbox_id else None
         if tenant:
             # costo_acumulado incluye todos los turnos de la conversación;
@@ -295,7 +308,7 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
             costo_total += state.get("costo_estimado", 0.0)
             await save_appointment(
                 tenant_id=tenant["id"],
-                wa_id=state.get("wa_id", ""),
+                wa_id=wa_id,
                 nombre_paciente=nombre,
                 sede=sede,
                 servicio=servicio,

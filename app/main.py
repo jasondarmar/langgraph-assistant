@@ -4,12 +4,14 @@ Main — FastAPI app con endpoints de webhook y health check.
 import logging
 import sys
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import pytz
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -18,6 +20,8 @@ from app.graph import dental_agent
 from app.memory import reset_human_mode, clear_session
 from app.security import verify_chatwoot_signature, mask_sensitive_data, validate_rate_limit_key
 from app.schemas import WebhookPayloadValidated
+from app.audit_log import AuditLogger
+from app.data_retention import DataRetention
 from config.database import init_pool, close_pool
 from config.settings import get_settings
 
@@ -41,15 +45,44 @@ _stats = {
     "started_at": datetime.now(pytz.timezone("America/Bogota")).isoformat(),
 }
 
+# Data retention cleanup task
+_cleanup_task = None
+
+
+async def _run_data_retention_scheduler():
+    """Ejecuta la limpieza de datos cada 24 horas."""
+    while True:
+        try:
+            await asyncio.sleep(86400)  # 24 horas
+            logger.info("[Scheduler] Iniciando limpieza de datos...")
+            result = await DataRetention.cleanup_expired_data()
+            logger.info(f"[Scheduler] Limpieza completada: {result}")
+        except Exception as e:
+            logger.error(f"[Scheduler] Error en limpieza de datos: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _cleanup_task
     logger.info("🚀 LangGraph Dental Assistant arrancando...")
     if settings.database_url:
         await init_pool(settings.database_url)
+        # Iniciar scheduler de limpieza de datos
+        _cleanup_task = asyncio.create_task(_run_data_retention_scheduler())
+        logger.info("[Scheduler] Data retention scheduler iniciado")
     else:
         logger.warning("[DB] DATABASE_URL no configurado — registro en DB desactivado.")
+
     yield
+
+    # Cancelar scheduler
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
+
     await close_pool()
     logger.info("🛑 LangGraph Dental Assistant detenido.")
 
@@ -61,6 +94,32 @@ app = FastAPI(
     redoc_url=None if os.getenv("ENVIRONMENT") == "production" else "/redoc",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# ─── CORS Middleware ──────────────────────────────────────────────────────────
+# Permitir CORS solo desde dominios conocidos
+settings = get_settings()
+allowed_origins = [
+    "https://app.techideaslab.com",
+    "https://chatwoot.techideaslab.com",
+    "http://localhost:3000",
+    "http://localhost:8001",
+]
+
+if os.getenv("ENVIRONMENT") == "development":
+    allowed_origins.extend([
+        "http://localhost",
+        "http://127.0.0.1",
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["X-Process-Time"],
+    max_age=600,
 )
 
 # Agregar rate limiter a la app
@@ -98,6 +157,65 @@ async def stats():
             if _stats["total_messages"] > 0 else 0
         ),
     }
+
+
+# ─── Data Retention Policy ──────────────────────────────────────────────────
+@app.get("/privacy/retention-policy")
+async def retention_policy():
+    """Retorna la política de retención de datos (GDPR compliance)."""
+    return DataRetention.get_retention_policy()
+
+
+# ─── GDPR Right to Deletion ─────────────────────────────────────────────────
+@app.post("/gdpr/delete-user")
+@limiter.limit("5/hour")  # Máximo 5 solicitudes por hora
+async def gdpr_delete_user(request: Request):
+    """
+    Endpoint para solicitar la eliminación de todos los datos de un usuario.
+    GDPR Right to be Forgotten (Derecho al olvido).
+
+    Requiere:
+    - Header: Authorization: Bearer <GDPR_TOKEN>
+    - Body: { "wa_id": "573001234567" }
+    """
+    # Verificar token GDPR
+    auth_header = request.headers.get("Authorization", "")
+    gdpr_token = os.getenv("GDPR_TOKEN")
+
+    if not gdpr_token:
+        logger.warning("[GDPR] GDPR_TOKEN no configurado")
+        raise HTTPException(status_code=503, detail="GDPR deletion not configured")
+
+    token = auth_header.replace("Bearer ", "")
+    if token != gdpr_token:
+        logger.warning(f"[GDPR] Invalid token from {get_remote_address(request)}")
+        raise HTTPException(status_code=401, detail="Invalid GDPR token")
+
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    wa_id = body.get("wa_id", "").strip()
+    if not wa_id or len(wa_id) < 10:
+        logger.warning(f"[GDPR] Invalid wa_id format from {get_remote_address(request)}")
+        raise HTTPException(status_code=400, detail="Invalid wa_id format")
+
+    try:
+        success = await DataRetention.delete_user_data(wa_id)
+        if success:
+            logger.warning(f"[GDPR] ✅ User data deleted for wa_id={wa_id}")
+            return {
+                "status": "success",
+                "message": f"All data for wa_id={wa_id} has been deleted",
+                "timestamp": datetime.now(pytz.timezone("America/Bogota")).isoformat(),
+            }
+        else:
+            logger.error(f"[GDPR] ❌ Failed to delete user data for wa_id={wa_id}")
+            raise HTTPException(status_code=500, detail="Failed to delete user data")
+    except Exception as e:
+        logger.error(f"[GDPR] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── Webhook principal (desde Chatwoot) ──────────────────────────────────────

@@ -12,6 +12,8 @@ from uuid import UUID
 import pytz
 
 from config.database import get_pool
+from app.encryption import encrypt_field, decrypt_field
+from app.audit_log import AuditLogger
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ async def save_appointment(
 ) -> Optional[str]:
     """
     Inserta una cita nueva. Retorna el UUID generado o None si falla.
+    Encripta el resumen_conversacion antes de guardar.
     """
     pool = get_pool()
     if not pool:
@@ -64,6 +67,9 @@ async def save_appointment(
         fecha = None
         if fecha_cita:
             fecha = datetime.strptime(fecha_cita, "%Y-%m-%d").date()
+
+        # Encriptar resumen sensible
+        resumen_encrypted = encrypt_field(resumen_conversacion) if resumen_conversacion else None
 
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -83,10 +89,22 @@ async def save_appointment(
                 """,
                 tenant_id, wa_id, nombre_paciente, sede, servicio, doctor,
                 fecha, hora_cita, event_id,
-                resumen_conversacion, modelo_usado,
+                resumen_encrypted, modelo_usado,
                 tokens_entrada, tokens_salida, costo_estimado,
             )
             appointment_id = row["id"]
+
+            # Audit logging
+            AuditLogger.log_appointment_created(
+                wa_id=wa_id,
+                conv_id=None,
+                nombre=nombre_paciente,
+                fecha=fecha_cita,
+                doctor=doctor,
+                costo=costo_estimado,
+                event_id=event_id,
+            )
+
             logger.info(f"[DB] Cita guardada: {appointment_id} — {nombre_paciente} ({wa_id})")
             return appointment_id
     except Exception as e:
@@ -102,6 +120,7 @@ async def update_appointment_estado(
     """
     Actualiza el estado de una cita por su event_id de Google Calendar.
     estado: 'agendada' | 'cancelada' | 'completada'
+    Encripta el resumen antes de guardar si está presente.
     """
     pool = get_pool()
     if not pool:
@@ -113,13 +132,15 @@ async def update_appointment_estado(
 
         async with pool.acquire() as conn:
             if resumen_conversacion:
+                # Encriptar resumen sensible
+                resumen_encrypted = encrypt_field(resumen_conversacion)
                 result = await conn.execute(
                     """
                     UPDATE appointments
                     SET estado = $1, resumen_conversacion = $2, updated_at = $3
                     WHERE event_id = $4
                     """,
-                    estado, resumen_conversacion, now, event_id,
+                    estado, resumen_encrypted, now, event_id,
                 )
             else:
                 result = await conn.execute(
@@ -129,6 +150,14 @@ async def update_appointment_estado(
             updated = result.split()[-1] != "0"
             if updated:
                 logger.info(f"[DB] Cita actualizada a '{estado}': event_id={event_id}")
+
+                # Audit logging
+                AuditLogger.log_appointment_modified(
+                    wa_id="system",
+                    conv_id=None,
+                    event_id=event_id,
+                    cambios={"estado": estado},
+                )
             else:
                 logger.warning(f"[DB] No se encontró cita con event_id={event_id}")
             return updated

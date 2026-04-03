@@ -11,6 +11,9 @@ uvicorn[standard]>=0.30.0
 httpx>=0.27.0
 slowapi>=0.1.9  # Rate limiting
 
+# ─── Security (FASE 2) ──────────────────────────────────────────────────────
+cryptography>=41.0.0  # Encryption
+
 # ─── Config ──────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
 pydantic-settings>=2.0.0
