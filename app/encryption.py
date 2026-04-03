@@ -3,11 +3,9 @@ Encryption — AES-256 encryption/decryption para campos sensibles en DB.
 """
 import logging
 import os
+import hashlib
 from base64 import b64encode, b64decode
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
-from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +31,12 @@ class FieldEncryption:
             self.cipher = None
             return
 
-        # Derivar clave usando PBKDF2
-        kdf = PBKDF2(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=b"langgraph-assistant",  # Salt fijo para consistencia
-            iterations=100000,
-            backend=default_backend(),
-        )
-        key = b64encode(kdf.derive(master_key.encode()))
+        # Derivar clave usando SHA256 (determinístico)
+        # Concatenar master_key con salt fijo para reproducibilidad
+        key_material = (master_key + "langgraph-assistant").encode()
+        key_hash = hashlib.sha256(key_material).digest()
+        # Fernet requiere una clave en base64 de 32 bytes
+        key = b64encode(key_hash)
         self.cipher = Fernet(key)
 
     def encrypt(self, plaintext: str) -> str:
