@@ -7,6 +7,7 @@ from base64 import b64encode, b64decode
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class FieldEncryption:
             length=32,
             salt=b"langgraph-assistant",  # Salt fijo para consistencia
             iterations=100000,
+            backend=default_backend(),
         )
         key = b64encode(kdf.derive(master_key.encode()))
         self.cipher = Fernet(key)
