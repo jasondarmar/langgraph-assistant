@@ -56,3 +56,5 @@ class AgentState(TypedDict, total=False):
     # ─── Control de flujo ────────────────────────────────────────────────
     error: Optional[str]
     skip_llm: bool                # True si human_mode activo
+    pending_cancellation_matches: Optional[list]  # Citas encontradas para seleccionar
+    selected_match_index: Optional[int]  # Índice de cita seleccionada por usuario

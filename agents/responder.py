@@ -4,6 +4,7 @@ seleccionado por el router según la intención detectada.
 """
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 import pytz
 
@@ -75,6 +76,37 @@ def generate_response(state: AgentState) -> AgentState:
     if state.get("skip_llm", False):
         logger.info("[Responder] skip_llm=True, omitiendo generación")
         return state
+
+    # ─── Manejo de selección de cita (cancellation match selection) ────────
+    pending_matches = state.get("pending_cancellation_matches")
+    if pending_matches:
+        mensaje = state.get("mensaje_actual", "").strip()
+        # Extract number: "1", "1️⃣", "uno", etc.
+        # Remove emoji numbers and extract digit
+        numero_str = re.sub(r'[^\d]', '', mensaje.split()[0] if mensaje else "")
+        if numero_str:
+            try:
+                selected_idx = int(numero_str) - 1  # 1-based to 0-based
+                if 0 <= selected_idx < len(pending_matches):
+                    # Usuario seleccionó una cita
+                    match = pending_matches[selected_idx]
+                    event_id = match.get("id")
+                    logger.info(
+                        f"[Responder] Selección de cita: usuario eligió índice {selected_idx+1}, "
+                        f"event_id={event_id}"
+                    )
+                    datos = state.get("datos_capturados", {})
+                    return {
+                        **state,
+                        "datos_capturados": {**datos, "event_id": event_id},
+                        "pending_cancellation_matches": None,
+                        "accion_calendario": "delete",
+                        "estado_conversacion": "finalizado",  # cancelación pura
+                        "respuesta": "Cancelando tu cita... 😊",
+                        "error": None,
+                    }
+            except (ValueError, IndexError):
+                pass
 
     # ─── Contexto de fecha ───────────────────────────────────────────────
     fecha_actual = state.get("fecha_actual", "")

@@ -113,6 +113,94 @@ def create_appointment(
         return None
 
 
+def search_appointments_by_name(
+    patient_partial_name: str,
+    days_back: int = 30,
+    days_forward: int = 90,
+) -> list[dict]:
+    """
+    Busca citas en Google Calendar por nombre parcial del paciente.
+    Usa fuzzy matching: 'José Pérez' coincide con 'José Antonio Pérez'.
+
+    Retorna lista de eventos que coinciden, ordenados por fecha.
+    Cada evento incluye: id, summary, start, description, nombre_paciente.
+    """
+    settings = get_settings()
+    try:
+        service = _get_calendar_service()
+        tz = pytz.timezone("America/Bogota")
+        now = datetime.now(tz)
+
+        # Rango de búsqueda: últimos 30 días y próximos 90 días
+        time_min = (now - timedelta(days=days_back)).isoformat()
+        time_max = (now + timedelta(days=days_forward)).isoformat()
+
+        result = service.events().list(
+            calendarId=settings.google_calendar_id,
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            orderBy="startTime",
+        ).execute()
+
+        events = result.get("items", [])
+        matches = []
+
+        # Normalizar nombre de búsqueda: dividir en partes y lowercase
+        search_parts = [p.lower().strip() for p in patient_partial_name.split()]
+        if not search_parts or not search_parts[0]:
+            return []
+
+        for ev in events:
+            summary = ev.get("summary", "")
+            description = ev.get("description", "")
+
+            # Extraer nombre del paciente del summary: "Sede - Nombre - Servicio - Doctor"
+            # O del description: "Sede: ... | Paciente: NombrePaciente | ..."
+            patient_name = ""
+
+            if "Paciente:" in description:
+                # Extraer del description
+                try:
+                    parts = description.split("|")
+                    for part in parts:
+                        if "Paciente:" in part:
+                            patient_name = part.split("Paciente:")[1].strip()
+                            break
+                except Exception:
+                    pass
+
+            if not patient_name and summary:
+                # Fallback: extraer del summary (segundo elemento)
+                try:
+                    summary_parts = summary.split(" - ")
+                    if len(summary_parts) >= 2:
+                        patient_name = summary_parts[1].strip()
+                except Exception:
+                    pass
+
+            if not patient_name:
+                continue
+
+            # Fuzzy matching: todas las partes del nombre de búsqueda deben estar en el nombre
+            patient_name_lower = patient_name.lower()
+            if all(part in patient_name_lower for part in search_parts):
+                matches.append({
+                    "id": ev.get("id"),
+                    "summary": summary,
+                    "start": ev.get("start", {}).get("dateTime"),
+                    "description": description,
+                    "nombre_paciente": patient_name,
+                })
+
+        logger.info(f"[Calendar] search_appointments_by_name('{patient_partial_name}'): {len(matches)} coincidencias")
+        return matches
+
+    except Exception as e:
+        logger.error(f"[Calendar] Error en search_appointments_by_name: {e}")
+        return []
+
+
 def delete_appointment(event_id: str) -> bool:
     """
     Elimina un evento del calendario por su ID.
@@ -254,19 +342,59 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
     if accion == "delete":
         event_id = datos.get("event_id")
         if not event_id or event_id in _NULL_VALS:
+            # Sin event_id: intentar buscar citas por nombre
+            nombre_parcial = datos.get("nombre_paciente", "")
             intent = state.get("intent", "")
-            if intent in ("cancelar_cita", "modificar_cita"):
-                logger.warning("[Calendar] accion=delete sin event_id en flujo cancel/modify — limpiando sesión")
+
+            if intent in ("cancelar_cita", "modificar_cita") and nombre_parcial and nombre_parcial not in _NULL_VALS:
+                # Buscar citas coincidentes
+                matches = search_appointments_by_name(nombre_parcial)
+
+                if len(matches) == 1:
+                    # Solo una coincidencia → usar directamente
+                    event_id = matches[0]["id"]
+                    logger.info(f"[Calendar] Única coincidencia encontrada: {matches[0]['nombre_paciente']}")
+                    # Continuar con el delete
+                elif len(matches) > 1:
+                    # Múltiples coincidencias → pedir que elija
+                    opciones = []
+                    for i, m in enumerate(matches, 1):
+                        fecha = m.get("start", "").split("T")[0] if m.get("start") else "fecha desconocida"
+                        hora = m.get("start", "").split("T")[1][:5] if m.get("start") else "hora desconocida"
+                        opciones.append(
+                            f"{i}️⃣ {m['nombre_paciente']} - {m['summary'].split(' - ')[2] if ' - ' in m['summary'] else 'Servicio'} - {fecha} {hora}"
+                        )
+
+                    respuesta = (
+                        "Encontré múltiples citas a tu nombre. ¿Cuál deseas cancelar?\n\n" +
+                        "\n".join(opciones) +
+                        "\n\nResponde con el número (ej: 1️⃣)"
+                    )
+                    logger.info(f"[Calendar] Múltiples coincidencias encontradas: {len(matches)}")
+                    return {
+                        **state,
+                        "respuesta": respuesta,
+                        "accion_calendario": None,
+                        "pending_cancellation_matches": matches,
+                    }
+                else:
+                    # Sin coincidencias
+                    logger.warning(f"[Calendar] Sin coincidencias para '{nombre_parcial}'")
+                    return {
+                        **state,
+                        "datos_capturados": {},
+                        "estado_conversacion": "en_proceso",
+                        "accion_calendario": None,
+                        "respuesta": f"No encontré citas a nombre de '{nombre_parcial}'. Por favor, proporciona más detalles (nombre completo o fecha). 😊",
+                    }
+
+            else:
+                logger.warning("[Calendar] accion=delete sin event_id y sin nombre — ignorando delete")
                 return {
                     **state,
-                    "datos_capturados": {},
-                    "estado_conversacion": "en_proceso",
                     "accion_calendario": None,
                     "respuesta": "No encontré una cita activa en tu nombre. ¿Te gustaría agendar una nueva cita? 😊",
                 }
-            else:
-                logger.warning("[Calendar] accion=delete sin event_id — ignorando delete, continuando normal")
-                return {**state, "accion_calendario": None}
 
         success = delete_appointment(event_id)
         if not success:
