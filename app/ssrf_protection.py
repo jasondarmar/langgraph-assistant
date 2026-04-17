@@ -27,8 +27,11 @@ class SSRFProtection:
         "audio/mpeg",
         "audio/wav",
         "audio/ogg",
+        "audio/opus",
         "audio/webm",
         "audio/mp3",
+        "audio/mp4",
+        "audio/aac",
         "application/octet-stream",
     }
 
