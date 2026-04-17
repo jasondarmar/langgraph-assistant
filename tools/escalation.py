@@ -3,10 +3,20 @@ Escalation — escalamiento a agente humano vía API de Chatwoot.
 Asigna la conversación, cambia estado a 'pending' y envía nota privada.
 """
 import logging
+import os
 import httpx
 from app.state import AgentState
 from app.audit_log import AuditLogger
 from config.settings import get_settings
+
+# Ruta base de fotos relativa al directorio del proyecto
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "doctors")
+
+DOCTOR_PHOTOS: dict[str, str] = {
+    "Dr. Enrique Luna":    os.path.join(_ASSETS_DIR, "dr_enrique_luna.jpg"),
+    "Dr. Sebastián Luna":  os.path.join(_ASSETS_DIR, "dr_sebastian_luna.jpg"),
+    "Dra. Mónica González": os.path.join(_ASSETS_DIR, "dra_monica_gonzalez.jpg"),
+}
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +32,43 @@ def _chatwoot_headers() -> dict:
 def _base_url() -> str:
     settings = get_settings()
     return f"{settings.chatwoot_base_url}/api/v1/accounts/{settings.chatwoot_account_id}"
+
+
+async def send_doctor_photo(conv_id: int, doctor: str) -> bool:
+    """
+    Envía la foto del doctor como adjunto en la conversación de Chatwoot.
+    Retorna True si el envío fue exitoso.
+    """
+    photo_path = DOCTOR_PHOTOS.get(doctor)
+    if not photo_path:
+        logger.warning(f"[DoctorPhoto] Sin foto registrada para: {doctor}")
+        return False
+    if not os.path.isfile(photo_path):
+        logger.warning(f"[DoctorPhoto] Archivo no encontrado: {photo_path}")
+        return False
+
+    base = _base_url()
+    headers = {"api_access_token": _chatwoot_headers()["api_access_token"]}
+
+    try:
+        with open(photo_path, "rb") as f:
+            file_bytes = f.read()
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                f"{base}/conversations/{conv_id}/messages",
+                headers=headers,
+                data={"message_type": "outgoing", "private": "false"},
+                files={"attachments[]": (os.path.basename(photo_path), file_bytes, "image/jpeg")},
+            )
+            resp.raise_for_status()
+
+        logger.info(f"[DoctorPhoto] Foto enviada para {doctor} en conv {conv_id}")
+        return True
+
+    except Exception as e:
+        logger.error(f"[DoctorPhoto] Error enviando foto de {doctor}: {e}")
+        return False
 
 
 async def escalate_to_human(state: AgentState) -> AgentState:

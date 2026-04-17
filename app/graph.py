@@ -17,7 +17,7 @@ from agents.classifier import classify_intent
 from agents.responder import generate_response
 from tools.whisper import transcribe_audio_node
 from tools.appointments import handle_calendar_action
-from tools.escalation import escalate_to_human
+from tools.escalation import escalate_to_human, send_doctor_photo
 from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,14 @@ async def send_response_node(state: AgentState) -> AgentState:
     except Exception as e:
         logger.error(f"[Send] Error enviando respuesta: {e}")
         return {**state, "error": str(e)}
+
+    # Enviar foto del doctor al confirmar una nueva cita
+    estado_conv = state.get("estado_conversacion")
+    datos = state.get("datos_capturados", {})
+    doctor = datos.get("doctor")
+    event_id = datos.get("event_id")
+    if estado_conv == "finalizado" and doctor and event_id:
+        await send_doctor_photo(conv_id, doctor)
 
     return state
 
