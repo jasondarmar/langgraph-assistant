@@ -270,6 +270,20 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
         if "pm" in hora_lower and dt_start.hour < 12:
             dt_start = dt_start.replace(hour=dt_start.hour + 12)
 
+        # Rechazar domingos
+        if dt_start.weekday() == 6:
+            logger.warning(f"[Calendar] Domingo rechazado: {dt_start.date()}")
+            return {
+                **state,
+                "datos_capturados": {**datos, "fecha_cita": None, "hora_cita": None},
+                "estado_conversacion": "en_proceso",
+                "error": "Domingo no disponible",
+                "respuesta": (
+                    "Los domingos no tenemos atención 😊. "
+                    "Estamos disponibles de lunes a sábado. ¿Qué otro día te queda bien?"
+                ),
+            }
+
         # Rechazar fechas en el pasado
         tz = pytz.timezone("America/Bogota")
         if dt_start < datetime.now(tz).replace(tzinfo=None):
