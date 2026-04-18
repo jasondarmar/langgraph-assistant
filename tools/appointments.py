@@ -284,6 +284,20 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
                     "para agendar tu cita."
                 ),
             }
+
+        # Rechazar horarios fuera del rango permitido (8AM–6PM)
+        if not (8 <= dt_start.hour < 18):
+            logger.warning(f"[Calendar] Horario fuera de rango rechazado: {dt_start.hour}:{dt_start.minute:02d}")
+            return {
+                **state,
+                "datos_capturados": {**datos, "hora_cita": None},
+                "estado_conversacion": "en_proceso",
+                "error": "Horario fuera de rango",
+                "respuesta": (
+                    "Nuestro horario de atención es de 8:00 AM a 6:00 PM, "
+                    "lunes a sábado 😊. ¿A qué hora te queda mejor dentro de ese rango?"
+                ),
+            }
         dt_end = dt_start + timedelta(hours=1)
         start_iso = dt_start.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
         end_iso = dt_end.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
