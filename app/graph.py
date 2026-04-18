@@ -124,13 +124,26 @@ async def send_response_node(state: AgentState) -> AgentState:
         logger.error(f"[Send] Error enviando respuesta: {e}")
         return {**state, "error": str(e)}
 
-    # Enviar foto del doctor al confirmar una nueva cita
+    # Enviar foto del doctor y slogan al confirmar una nueva cita
     estado_conv = state.get("estado_conversacion")
     datos = state.get("datos_capturados", {})
     doctor = datos.get("doctor")
     event_id = datos.get("event_id")
     if estado_conv == "finalizado" and doctor and event_id:
         await send_doctor_photo(conv_id, doctor)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{base}/conversations/{conv_id}/messages",
+                    headers=headers,
+                    json={
+                        "content": "✨Vive la experiencia de sonreír con Luna González✨",
+                        "message_type": "outgoing",
+                        "private": False,
+                    },
+                )
+        except Exception as e:
+            logger.error(f"[Send] Error enviando slogan: {e}")
 
     return state
 
