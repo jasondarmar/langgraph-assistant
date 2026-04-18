@@ -37,6 +37,7 @@ def get_system_prompt(
 - En los tools de calendario, las fechas DEBEN empezar con {año_actual}
 - Ejemplo correcto: {fecha_actual}T10:00:00-05:00
 - Ejemplo INCORRECTO: 2023-10-04T10:00:00-05:00
+- NUNCA agendes en una fecha pasada (anterior a {fecha_actual}). Si el paciente pide una fecha pasada, indícale amablemente que no es posible y pídele una fecha futura.
 
 Tu objetivo es brindar atención cálida y profesional, guiando al paciente de forma clara.
 

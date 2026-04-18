@@ -269,6 +269,21 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
         dt_start = datetime.strptime(f"{fecha} {hora_clean}", "%Y-%m-%d %H:%M")
         if "pm" in hora_lower and dt_start.hour < 12:
             dt_start = dt_start.replace(hour=dt_start.hour + 12)
+
+        # Rechazar fechas en el pasado
+        tz = pytz.timezone("America/Bogota")
+        if dt_start < datetime.now(tz).replace(tzinfo=None):
+            logger.warning(f"[Calendar] Fecha en el pasado rechazada: {dt_start}")
+            return {
+                **state,
+                "datos_capturados": {**datos, "fecha_cita": None, "hora_cita": None},
+                "estado_conversacion": "en_proceso",
+                "error": "Fecha en el pasado",
+                "respuesta": (
+                    "Esa fecha ya pasó 😊. Por favor indícame una fecha futura "
+                    "para agendar tu cita."
+                ),
+            }
         dt_end = dt_start + timedelta(hours=1)
         start_iso = dt_start.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
         end_iso = dt_end.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
