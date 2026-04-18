@@ -152,9 +152,16 @@ def generate_response(state: AgentState) -> AgentState:
     now = datetime.now(tz)
     manana = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
+    sender_name = state.get("sender_name", "")
+    nombre_capturado = datos.get("nombre_paciente")
     context_lines = [
         f"[FECHA ACTUAL: {fecha_actual_texto} ({fecha_actual}). Zona horaria: America/Bogota (UTC-5)]",
     ]
+    if sender_name and nombre_capturado in _null_vals_ctx:
+        context_lines.append(
+            f"[NOMBRE WHATSAPP DEL PACIENTE: {sanitize_for_prompt(sender_name, max_length=100)}. "
+            "Puedes usarlo para dirigirte a él/ella de forma amable mientras no proporcione su nombre completo.]"
+        )
     if fecha_calculada:
         context_lines.append(
             f"[FECHA CALCULADA PARA LA CITA: {fecha_calculada}. USA ESTA FECHA EXACTA.]"
