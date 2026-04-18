@@ -159,8 +159,8 @@ def generate_response(state: AgentState) -> AgentState:
     ]
     if sender_name and nombre_capturado in _null_vals_ctx:
         context_lines.append(
-            f"[NOMBRE WHATSAPP DEL PACIENTE: {sanitize_for_prompt(sender_name, max_length=100)}. "
-            "Puedes usarlo para dirigirte a él/ella de forma amable mientras no proporcione su nombre completo.]"
+            f"[NOMBRE WHATSAPP: {sanitize_for_prompt(sender_name, max_length=100)}. "
+            "OBLIGATORIO: usa este nombre para dirigirte al paciente en TODOS tus mensajes hasta que proporcione su nombre completo.]"
         )
     if fecha_calculada:
         context_lines.append(
