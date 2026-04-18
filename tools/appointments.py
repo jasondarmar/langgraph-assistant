@@ -356,10 +356,26 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
                 f"[DB] Tenant no encontrado para inbox_id={inbox_id} — cita no registrada en DB."
             )
 
+        # Formatear hora para el mensaje de confirmación
+        try:
+            hora_dt = datetime.strptime(hora_clean, "%H:%M")
+            hora_fmt = hora_dt.strftime("%I:%M %p").lstrip("0")
+        except Exception:
+            hora_fmt = hora
+
         return {
             **state,
             "datos_capturados": {**datos, "event_id": new_event_id},
             "estado_conversacion": "finalizado",
+            "respuesta": (
+                f"✅ ¡Tu cita ha sido confirmada, {nombre}!\n"
+                f"📅 Fecha: {fecha}\n"
+                f"🕐 Hora: {hora_fmt}\n"
+                f"👨‍⚕️ Doctor: {doctor}\n"
+                f"📍 Sede: {sede}\n"
+                f"🦷 Servicio: {servicio}\n\n"
+                "Te esperamos 😊"
+            ),
         }
 
     except Exception as e:
