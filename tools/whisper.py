@@ -38,6 +38,16 @@ async def transcribe_audio_node(state: AgentState) -> AgentState:
 
     settings = get_settings()
 
+    # Reescribir URLs internas de Coolify (sslip.io) al nombre de contenedor
+    # para que sean accesibles desde dentro de la red Docker
+    import re as _re
+    audio_url = _re.sub(
+        r'https?://[^/]*\.sslip\.io',
+        'http://chatwoot-voc0cwk0k40sscw08gs8g44w:3000',
+        audio_url,
+    )
+    logger.debug(f"[Whisper] URL resuelta: {audio_url}")
+
     try:
         # Descargar audio desde Chatwoot (requiere autenticación)
         async with httpx.AsyncClient(timeout=30.0) as client:
