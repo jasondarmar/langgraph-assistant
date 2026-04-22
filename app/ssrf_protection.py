@@ -17,6 +17,7 @@ class SSRFProtection:
         "n8n.techideaslab.com",
         "localhost",
         "127.0.0.1",
+        "chatwoot-voc0cwk0k40sscw08gs8g44w.178.156.227.221.sslip.io",
     }
 
     # Máximo tamaño de archivo (25MB)
