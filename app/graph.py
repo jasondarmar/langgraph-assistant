@@ -124,12 +124,10 @@ async def send_response_node(state: AgentState) -> AgentState:
         logger.error(f"[Send] Error enviando respuesta: {e}")
         return {**state, "error": str(e)}
 
-    # Enviar foto del doctor y slogan al confirmar una nueva cita
-    estado_conv = state.get("estado_conversacion")
+    # Enviar foto del doctor y slogan solo cuando se acaba de crear/reagendar una cita
     datos = state.get("datos_capturados", {})
     doctor = datos.get("doctor")
-    event_id = datos.get("event_id")
-    if estado_conv == "finalizado" and doctor and event_id:
+    if state.get("cita_recien_creada") and doctor:
         await send_doctor_photo(conv_id, doctor)
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

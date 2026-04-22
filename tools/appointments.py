@@ -381,6 +381,7 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
             **state,
             "datos_capturados": {**datos, "event_id": new_event_id},
             "estado_conversacion": "finalizado",
+            "cita_recien_creada": True,
             "respuesta": (
                 f"✅ ¡Tu cita ha sido confirmada, {nombre}!\n"
                 f"📅 Fecha: {fecha}\n"
@@ -546,6 +547,7 @@ async def handle_calendar_action(state: AgentState) -> AgentState:
                     f"¡Listo, {nombre}! Tu cita ha sido reagendada para el {fecha} "
                     f"a las {hora} con {doctor} en la sede {sede}. 😊"
                 )
+                result["cita_recien_creada"] = True
                 logger.info("[Calendar] Modificación completada: delete + create en un solo turno")
             else:
                 # Create failed with error (e.g. doctor not available) — inform user

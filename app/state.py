@@ -58,3 +58,4 @@ class AgentState(TypedDict, total=False):
     skip_llm: bool                # True si human_mode activo
     pending_cancellation_matches: Optional[list]  # Citas encontradas para seleccionar
     selected_match_index: Optional[int]  # Índice de cita seleccionada por usuario
+    cita_recien_creada: bool      # True solo cuando se crea/reagenda una cita en este turno
