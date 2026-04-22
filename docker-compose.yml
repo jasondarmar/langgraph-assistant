@@ -17,6 +17,15 @@ services:
     networks:
       - default
       - chatwoot_net
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dental-assistant.rule=Host(`agent.techideaslab.com`)"
+      - "traefik.http.routers.dental-assistant.entrypoints=https"
+      - "traefik.http.routers.dental-assistant.tls=true"
+      - "traefik.http.routers.dental-assistant.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dental-assistant.loadbalancer.server.port=8001"
+      - "traefik.docker.network=coolify"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -47,3 +56,6 @@ networks:
   chatwoot_net:
     external: true
     name: voc0cwk0k40sscw08gs8g44w
+  coolify:
+    external: true
+    name: coolify
