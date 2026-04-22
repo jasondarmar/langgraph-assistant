@@ -143,6 +143,38 @@ async def send_response_node(state: AgentState) -> AgentState:
         except Exception as e:
             logger.error(f"[Send] Error enviando slogan: {e}")
 
+    # Enviar resumen como nota privada al finalizar la conversación
+    if state.get("estado_conversacion") == "finalizado":
+        resumen = state.get("resumen_conversacion", "").strip()
+        datos = state.get("datos_capturados", {})
+        if resumen:
+            try:
+                nombre = datos.get("nombre_paciente", "—")
+                doctor = datos.get("doctor", "—")
+                sede = datos.get("sede", "—")
+                servicio = datos.get("servicio", "—")
+                fecha = datos.get("fecha_cita", "—")
+                hora = datos.get("hora_cita", "—")
+                nota = (
+                    f"📋 *Resumen de conversación — {nombre}*\n\n"
+                    f"{resumen}\n\n"
+                    f"📅 Cita: {fecha} {hora}\n"
+                    f"👨‍⚕️ {doctor} | 📍 {sede} | 🦷 {servicio}"
+                )
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(
+                        f"{base}/conversations/{conv_id}/messages",
+                        headers=headers,
+                        json={
+                            "content": nota,
+                            "message_type": "outgoing",
+                            "private": True,
+                        },
+                    )
+                logger.info(f"[Send] Nota privada con resumen enviada a conv {conv_id}")
+            except Exception as e:
+                logger.error(f"[Send] Error enviando nota privada: {e}")
+
     return state
 
 
