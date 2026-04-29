@@ -282,7 +282,7 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
                 "estado_conversacion": "en_proceso",
                 "error": f"Festivo: {nombre_festivo}",
                 "respuesta": (
-                    f"El {dt_start.strftime('%d de %B')} es {nombre_festivo}, no tenemos atención ese día 😊. "
+                    f"El {dt_start.strftime('%d de %B')} es día festivo y no tenemos atención 😊. "
                     "¿Te gustaría agendar para otro día?"
                 ),
             }
