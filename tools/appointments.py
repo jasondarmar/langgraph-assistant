@@ -259,6 +259,21 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
         logger.warning(f"[Calendar] _execute_create: campos faltantes {missing} — abortando")
         return None
 
+    # Validar sede
+    VALID_SEDES = {"Bogotá", "La Vega", "Villeta"}
+    if sede not in VALID_SEDES:
+        logger.warning(f"[Calendar] Sede inválida rechazada: {sede}")
+        return {
+            **state,
+            "datos_capturados": {**datos, "sede": None},
+            "estado_conversacion": "en_proceso",
+            "error": f"Sede inválida: {sede}",
+            "respuesta": (
+                "Solo tenemos atención en Bogotá, La Vega y Villeta 😊. "
+                "¿En cuál de estas sedes te gustaría agendar?"
+            ),
+        }
+
     try:
         hora_lower = hora.lower().strip()
         hora_clean = hora_lower.replace("pm", "").replace("am", "").strip()
@@ -302,8 +317,7 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
             }
 
         # Rechazar fechas en el pasado
-        tz = pytz.timezone("America/Bogota")
-        if dt_start < datetime.now(tz).replace(tzinfo=None):
+        if dt_start < ahora:
             logger.warning(f"[Calendar] Fecha en el pasado rechazada: {dt_start}")
             return {
                 **state,
@@ -329,9 +343,43 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
                     "lunes a sábado 😊. ¿A qué hora te queda mejor dentro de ese rango?"
                 ),
             }
+        # Rechazar citas con menos de 2 horas de anticipación
+        tz = pytz.timezone("America/Bogota")
+        ahora = datetime.now(tz).replace(tzinfo=None)
+        if (dt_start - ahora).total_seconds() < 7200:
+            logger.warning(f"[Calendar] Anticipación insuficiente: {dt_start}")
+            return {
+                **state,
+                "datos_capturados": {**datos, "fecha_cita": None, "hora_cita": None},
+                "estado_conversacion": "en_proceso",
+                "error": "Anticipación mínima no cumplida",
+                "respuesta": (
+                    "Las citas deben agendarse con mínimo 2 horas de anticipación 😊. "
+                    "¿Te gustaría elegir otro horario?"
+                ),
+            }
+
         dt_end = dt_start + timedelta(hours=1)
         start_iso = dt_start.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
         end_iso = dt_end.strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
+
+        # Verificar cita duplicada del mismo paciente en el mismo día
+        dia_inicio = dt_start.replace(hour=0, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
+        dia_fin = dt_start.replace(hour=23, minute=59, second=59).strftime("%Y-%m-%dT%H:%M:%S") + "-05:00"
+        citas_dia = get_availability(dia_inicio, dia_fin)
+        for ev in citas_dia:
+            if nombre and nombre.lower() in ev.get("summary", "").lower():
+                logger.warning(f"[Calendar] Cita duplicada detectada para {nombre} en {fecha}")
+                return {
+                    **state,
+                    "datos_capturados": {**datos, "fecha_cita": None, "hora_cita": None},
+                    "estado_conversacion": "en_proceso",
+                    "error": "Cita duplicada",
+                    "respuesta": (
+                        f"Ya tienes una cita agendada para ese día, {nombre} 😊. "
+                        "¿Te gustaría elegir otra fecha?"
+                    ),
+                }
 
         # Verificar disponibilidad
         existing = get_availability(start_iso, end_iso)
