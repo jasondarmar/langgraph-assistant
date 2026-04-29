@@ -270,6 +270,23 @@ async def _execute_create(state: AgentState, datos: dict) -> AgentState | None:
         if "pm" in hora_lower and dt_start.hour < 12:
             dt_start = dt_start.replace(hour=dt_start.hour + 12)
 
+        # Rechazar festivos colombianos
+        import holidays as _holidays
+        festivos_co = _holidays.Colombia(years=dt_start.year)
+        if dt_start.date() in festivos_co:
+            nombre_festivo = festivos_co.get(dt_start.date(), "día festivo")
+            logger.warning(f"[Calendar] Festivo rechazado: {dt_start.date()} ({nombre_festivo})")
+            return {
+                **state,
+                "datos_capturados": {**datos, "fecha_cita": None, "hora_cita": None},
+                "estado_conversacion": "en_proceso",
+                "error": f"Festivo: {nombre_festivo}",
+                "respuesta": (
+                    f"El {dt_start.strftime('%d de %B')} es {nombre_festivo}, no tenemos atención ese día 😊. "
+                    "¿Te gustaría agendar para otro día?"
+                ),
+            }
+
         # Rechazar domingos
         if dt_start.weekday() == 6:
             logger.warning(f"[Calendar] Domingo rechazado: {dt_start.date()}")
